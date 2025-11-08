@@ -8,6 +8,7 @@ import com.intellij.psi.*;
 import com.intellij.psi.util.PsiTreeUtil;
 import com.intellij.openapi.ui.Messages;
 import com.intellij.openapi.util.TextRange;
+import com.intellij.psi.PsiParserFacade;
 import org.jetbrains.annotations.NotNull;
 
 import java.util.*;
@@ -69,6 +70,14 @@ public class SortAction extends AnAction {
         PsiElement element = file.findElementAt(offset);
         return PsiTreeUtil.getParentOfType(element, PsiClass.class);
     }
+    
+    private boolean hasResourceAnnotation(PsiField field) {
+        PsiModifierList modifierList = field.getModifierList();
+        if (modifierList == null) return false;
+        
+        // Check if the field has any annotation
+        return modifierList.getAnnotations().length > 0;
+    }
 
     private void sortClassMembers(@NotNull Project project, Editor editor, PsiClass psiClass, List<PsiMember> membersToSort) {
         List<PsiMember> members;
@@ -118,8 +127,87 @@ public class SortAction extends AnAction {
                     memberCopies.add((PsiMember) member.copy());
                 }
                 
-                // Sort the copies
-                memberCopies.sort(new CodeElementSortComparator());
+                // Separate annotated and non-annotated fields
+                List<PsiMember> annotatedFields = new ArrayList<>();
+                List<PsiMember> nonAnnotatedFields = new ArrayList<>();
+                List<PsiMember> methods = new ArrayList<>();
+                
+                // Categorize members
+                for (PsiMember member : memberCopies) {
+                    if (member instanceof PsiField) {
+                        if (hasResourceAnnotation((PsiField) member)) {
+                            annotatedFields.add(member);
+                        } else {
+                            nonAnnotatedFields.add(member);
+                        }
+                    } else if (member instanceof PsiMethod) {
+                        methods.add(member);
+                    }
+                }
+                
+                // Sort each category
+                // For annotated fields and non-annotated fields, we need a comparator that doesn't consider element type
+                // since they are already separated
+                Comparator<PsiMember> fieldComparator = new Comparator<PsiMember>() {
+                    @Override
+                    public int compare(PsiMember member1, PsiMember member2) {
+                        // Second priority: Visibility (public before package-private before protected before private)
+                        int visibilityComparison = compareByVisibility(member1, member2);
+                        if (visibilityComparison != 0) {
+                            return visibilityComparison;
+                        }
+                        
+                        // Third priority: Name in alphabetical order (case-insensitive)
+                        return compareByName(member1, member2);
+                    }
+                    
+                    private int compareByVisibility(PsiMember member1, PsiMember member2) {
+                        // Get visibility priorities for both members
+                        int visibility1 = getVisibilityPriority(member1);
+                        int visibility2 = getVisibilityPriority(member2);
+                        
+                        return Integer.compare(visibility1, visibility2);
+                    }
+                    
+                    private int getVisibilityPriority(PsiMember member) {
+                        if (member.getModifierList() == null) {
+                            return 1; // If no modifier list, assume package-private (default)
+                        }
+                        
+                        if (member.hasModifierProperty(PsiModifier.PUBLIC)) {
+                            return 0; // Public first
+                        } else if (member.hasModifierProperty(PsiModifier.PROTECTED)) {
+                            return 2; // Protected third
+                        } else if (member.hasModifierProperty(PsiModifier.PRIVATE)) {
+                            return 3; // Private last
+                        } else {
+                            return 1; // Package-private (default) second
+                        }
+                    }
+                    
+                    private int compareByName(PsiMember member1, PsiMember member2) {
+                        String name1 = member1.getName();
+                        String name2 = member2.getName();
+                        
+                        if (name1 == null) name1 = "";
+                        if (name2 == null) name2 = "";
+                        
+                        // Case-insensitive alphabetical order
+                        return name1.toLowerCase().compareTo(name2.toLowerCase());
+                    }
+                };
+                
+                annotatedFields.sort(fieldComparator);
+                nonAnnotatedFields.sort(fieldComparator);
+                methods.sort(new CodeElementSortComparator());
+                
+                // Combine in order: annotated fields, non-annotated fields, methods
+                memberCopies.clear();
+                memberCopies.addAll(annotatedFields);
+                // Add a separator between annotated and non-annotated fields if both exist
+                boolean needsSeparator = !annotatedFields.isEmpty() && (!nonAnnotatedFields.isEmpty() || !methods.isEmpty());
+                memberCopies.addAll(nonAnnotatedFields);
+                memberCopies.addAll(methods);
                 
                 // Delete from last to first to maintain text offsets
                 membersToDelete.sort((a, b) -> b.getTextRange().getStartOffset() - a.getTextRange().getStartOffset());
@@ -128,8 +216,45 @@ public class SortAction extends AnAction {
                 }
                 
                 // Add sorted members back
-                for (PsiMember memberCopy : memberCopies) {
-                    psiClass.add(memberCopy);
+                // First, add all annotated fields
+                PsiElement lastAdded = null;
+                for (int i = 0; i < annotatedFields.size(); i++) {
+                    PsiMember memberCopy = annotatedFields.get(i);
+                    if (lastAdded == null) {
+                        lastAdded = psiClass.add(memberCopy);
+                    } else {
+                        lastAdded = psiClass.addAfter(memberCopy, lastAdded);
+                    }
+                }
+                
+                // Add separator between annotated and non-annotated fields if needed
+                if (needsSeparator) {
+                    try {
+                        PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                        lastAdded = psiClass.addAfter(whiteSpace, lastAdded);
+                    } catch (Exception e) {
+                        // Ignore if we can't add whitespace
+                    }
+                }
+                
+                // Then add non-annotated fields
+                for (int i = 0; i < nonAnnotatedFields.size(); i++) {
+                    PsiMember memberCopy = nonAnnotatedFields.get(i);
+                    if (lastAdded == null && annotatedFields.isEmpty()) {
+                        lastAdded = psiClass.add(memberCopy);
+                    } else {
+                        lastAdded = psiClass.addAfter(memberCopy, lastAdded);
+                    }
+                }
+                
+                // Finally add methods
+                for (int i = 0; i < methods.size(); i++) {
+                    PsiMember memberCopy = methods.get(i);
+                    if (lastAdded == null && annotatedFields.isEmpty() && nonAnnotatedFields.isEmpty()) {
+                        lastAdded = psiClass.add(memberCopy);
+                    } else {
+                        lastAdded = psiClass.addAfter(memberCopy, lastAdded);
+                    }
                 }
             } else {
                 // For selected members - replace only the selected ones
@@ -139,8 +264,87 @@ public class SortAction extends AnAction {
                     memberCopies.add((PsiMember) member.copy());
                 }
                 
-                // Sort the copies
-                memberCopies.sort(new CodeElementSortComparator());
+                // Separate annotated and non-annotated fields
+                List<PsiMember> annotatedFields = new ArrayList<>();
+                List<PsiMember> nonAnnotatedFields = new ArrayList<>();
+                List<PsiMember> methods = new ArrayList<>();
+                
+                // Categorize members
+                for (PsiMember member : memberCopies) {
+                    if (member instanceof PsiField) {
+                        if (hasResourceAnnotation((PsiField) member)) {
+                            annotatedFields.add(member);
+                        } else {
+                            nonAnnotatedFields.add(member);
+                        }
+                    } else if (member instanceof PsiMethod) {
+                        methods.add(member);
+                    }
+                }
+                
+                // Sort each category
+                // For annotated fields and non-annotated fields, we need a comparator that doesn't consider element type
+                // since they are already separated
+                Comparator<PsiMember> fieldComparator = new Comparator<PsiMember>() {
+                    @Override
+                    public int compare(PsiMember member1, PsiMember member2) {
+                        // Second priority: Visibility (public before package-private before protected before private)
+                        int visibilityComparison = compareByVisibility(member1, member2);
+                        if (visibilityComparison != 0) {
+                            return visibilityComparison;
+                        }
+                        
+                        // Third priority: Name in alphabetical order (case-insensitive)
+                        return compareByName(member1, member2);
+                    }
+                    
+                    private int compareByVisibility(PsiMember member1, PsiMember member2) {
+                        // Get visibility priorities for both members
+                        int visibility1 = getVisibilityPriority(member1);
+                        int visibility2 = getVisibilityPriority(member2);
+                        
+                        return Integer.compare(visibility1, visibility2);
+                    }
+                    
+                    private int getVisibilityPriority(PsiMember member) {
+                        if (member.getModifierList() == null) {
+                            return 1; // If no modifier list, assume package-private (default)
+                        }
+                        
+                        if (member.hasModifierProperty(PsiModifier.PUBLIC)) {
+                            return 0; // Public first
+                        } else if (member.hasModifierProperty(PsiModifier.PROTECTED)) {
+                            return 2; // Protected third
+                        } else if (member.hasModifierProperty(PsiModifier.PRIVATE)) {
+                            return 3; // Private last
+                        } else {
+                            return 1; // Package-private (default) second
+                        }
+                    }
+                    
+                    private int compareByName(PsiMember member1, PsiMember member2) {
+                        String name1 = member1.getName();
+                        String name2 = member2.getName();
+                        
+                        if (name1 == null) name1 = "";
+                        if (name2 == null) name2 = "";
+                        
+                        // Case-insensitive alphabetical order
+                        return name1.toLowerCase().compareTo(name2.toLowerCase());
+                    }
+                };
+                
+                annotatedFields.sort(fieldComparator);
+                nonAnnotatedFields.sort(fieldComparator);
+                methods.sort(new CodeElementSortComparator());
+                
+                // Combine in order: annotated fields, non-annotated fields, methods
+                memberCopies.clear();
+                memberCopies.addAll(annotatedFields);
+                // Add a separator between annotated and non-annotated fields if both exist
+                boolean needsSeparator = !annotatedFields.isEmpty() && (!nonAnnotatedFields.isEmpty() || !methods.isEmpty());
+                memberCopies.addAll(nonAnnotatedFields);
+                memberCopies.addAll(methods);
                 
                 // Find the position to insert the sorted members
                 PsiElement positionMarker = null;
@@ -158,14 +362,76 @@ public class SortAction extends AnAction {
                 
                 // Insert sorted members at the appropriate position
                 if (positionMarker != null) {
-                    for (PsiMember memberCopy : memberCopies) {
-                        psiClass.addAfter(memberCopy, positionMarker);
-                        positionMarker = memberCopy;
+                    PsiElement lastAdded = positionMarker;
+                    
+                    // First, add all annotated fields
+                    for (int i = 0; i < annotatedFields.size(); i++) {
+                        PsiMember memberCopy = annotatedFields.get(i);
+                        lastAdded = psiClass.addAfter(memberCopy, lastAdded);
+                    }
+                    
+                    // Add separator between annotated and non-annotated fields if needed
+                    if (needsSeparator) {
+                        try {
+                            PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                            lastAdded = psiClass.addAfter(whiteSpace, lastAdded);
+                        } catch (Exception e) {
+                            // Ignore if we can't add whitespace
+                        }
+                    }
+                    
+                    // Then add non-annotated fields
+                    for (int i = 0; i < nonAnnotatedFields.size(); i++) {
+                        PsiMember memberCopy = nonAnnotatedFields.get(i);
+                        lastAdded = psiClass.addAfter(memberCopy, lastAdded);
+                    }
+                    
+                    // Finally add methods
+                    for (int i = 0; i < methods.size(); i++) {
+                        PsiMember memberCopy = methods.get(i);
+                        lastAdded = psiClass.addAfter(memberCopy, lastAdded);
                     }
                 } else {
                     // If no position marker found, just add all members
-                    for (PsiMember memberCopy : memberCopies) {
-                        psiClass.add(memberCopy);
+                    // First, add all annotated fields
+                    PsiElement lastAdded = null;
+                    for (int i = 0; i < annotatedFields.size(); i++) {
+                        PsiMember memberCopy = annotatedFields.get(i);
+                        if (lastAdded == null) {
+                            lastAdded = psiClass.add(memberCopy);
+                        } else {
+                            lastAdded = psiClass.addAfter(memberCopy, lastAdded);
+                        }
+                    }
+                    
+                    // Add separator between annotated and non-annotated fields if needed
+                    if (needsSeparator) {
+                        try {
+                            PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                            lastAdded = psiClass.addAfter(whiteSpace, lastAdded);
+                        } catch (Exception e) {
+                            // Ignore if we can't add whitespace
+                        }
+                    }
+                    
+                    // Then add non-annotated fields
+                    for (int i = 0; i < nonAnnotatedFields.size(); i++) {
+                        PsiMember memberCopy = nonAnnotatedFields.get(i);
+                        if (lastAdded == null && annotatedFields.isEmpty()) {
+                            lastAdded = psiClass.add(memberCopy);
+                        } else {
+                            lastAdded = psiClass.addAfter(memberCopy, lastAdded);
+                        }
+                    }
+                    
+                    // Finally add methods
+                    for (int i = 0; i < methods.size(); i++) {
+                        PsiMember memberCopy = methods.get(i);
+                        if (lastAdded == null && annotatedFields.isEmpty() && nonAnnotatedFields.isEmpty()) {
+                            lastAdded = psiClass.add(memberCopy);
+                        } else {
+                            lastAdded = psiClass.addAfter(memberCopy, lastAdded);
+                        }
                     }
                 }
             }

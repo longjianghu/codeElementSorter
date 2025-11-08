@@ -68,6 +68,12 @@ public class UserService {
     public static final int MAX_RETRY = 3;
     private UserRepository repository;
     
+    @Resource
+    private UserService userService;
+    
+    @Autowired
+    private UserRepository userRepository;
+    
     private void validateInput() { }
     public void createUser(User user) { }
     public void updateUser(Long id) { }
@@ -79,13 +85,20 @@ public class UserService {
 ### 4.2 排序后代码
 ```java
 public class UserService {
-    // 变量区域（公共在前，私有在后，按名称深度排序）
+    // 注解变量区域（按可见性→名称深度排序）
+    @Autowired
+    private UserRepository userRepository;
+    
+    @Resource
+    private UserService userService;
+    
+    // 普通变量区域（按可见性→名称深度排序）
     public static final int MAX_RETRY = 3;
     private Logger logger;
     private String logPrefix;
     private UserRepository repository;
     
-    // 方法区域（公共在前，私有在后，按名称深度排序）
+    // 方法区域（按可见性→名称深度排序）
     public void createUser(User user) { }
     public void deleteUser(Long id) { }
     public void updateUser(Long id) { }
@@ -108,10 +121,11 @@ public class UserService {
 
 #### 排序策略器 (SortingStrategy) 
 ```java
-// 实现多层排序规则
-- 类型优先级比较 (变量 > 方法)
-- 可见性优先级比较 (公共 > 私有)
-- 名称深度字母比较
+// 实现分组排序规则
+- 注解变量分组 (按可见性→名称深度排序)
+- 普通变量分组 (按可见性→名称深度排序)
+- 方法分组 (按可见性→名称深度排序)
+- 组间分隔空行处理
 ```
 
 #### 模式检测器 (ModeDetector)
@@ -126,10 +140,11 @@ public class UserService {
 ```
 1. 解析当前文件或选择区域
 2. 识别所有可排序元素
-3. 应用三层排序规则：
-   - 元素类型排序
-   - 可见性排序  
-   - 名称深度排序
+3. 应用分组排序规则：
+   - 注解变量分组排序（按可见性→名称深度排序）
+   - 普通变量分组排序（按可见性→名称深度排序）
+   - 方法分组排序（按可见性→名称深度排序）
+   - 组间添加分隔空行
 4. 重新生成排序后的代码
 5. 应用代码变更
 ```
