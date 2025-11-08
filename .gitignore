@@ -1,0 +1,19 @@
+# IntelliJ IDEA
+*.iml
+*.iws
+*.ipr
+.idea/
+out/
+build/
+
+# Gradle
+.gradle/
+build/
+
+# OS
+.DS_Store
+
+# Java
+*.class
+*.jar
+*.war
