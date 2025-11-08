@@ -1,32 +1,24 @@
 <idea-plugin>
-    <id>com.sohocn.codeElementSorter</id>
-    <name>Code Element Sorter</name>
-    <vendor email="215241062@qq.com">龙江湖</vendor>
+  <version>1.0.0</version>
+  <idea-version since-build="241" />
+  <id>com.sohocn.codeElementSorter</id>
+  <name>Code Element Sorter</name>
+  <vendor email="215241062@qq.com">龙江湖</vendor>
+  <description><![CDATA[Intelligent sorting of variables and methods in the current page, supporting both full-page sorting and selected region sorting modes.]]></description>
 
-    <description><![CDATA[
-    Intelligent sorting of variables and methods in the current page, supporting both full-page sorting and selected region sorting modes.
-    ]]></description>
+  <!-- please see https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
+       on how to target different products -->
+  <depends>com.intellij.modules.platform</depends>
+  <depends>com.intellij.modules.java</depends>
 
-    <!-- please see https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
-         on how to target different products -->
-    <depends>com.intellij.modules.platform</depends>
-    <depends>com.intellij.modules.java</depends>
+  <extensions defaultExtensionNs="com.intellij">
+    <!-- Add your extensions here -->
+  </extensions>
 
-    <extensions defaultExtensionNs="com.intellij">
-        <!-- Add your extensions here -->
-    </extensions>
-
-    <actions>
-        <group id="CodeElementSorter.Menu" text="Rearrange Code" description="Rearrange code elements">
-            <add-to-group group-id="RefactoringMenu" anchor="last"/>
-            <action id="CodeElementSorter.SortAll" class="com.sohocn.codeElementSorter.SortAllAction"
-                    text="Sort All Members A-Z" description="Sort all members in the current file">
-                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt S"/>
-            </action>
-            <action id="CodeElementSorter.SortSelected" class="com.sohocn.codeElementSorter.SortSelectedAction"
-                    text="Sort Selected Members A-Z" description="Sort selected members in the current file">
-                <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt shift S"/>
-            </action>
-        </group>
-    </actions>
+  <actions>
+    <!-- 将动作直接添加到编辑器右键菜单 -->
+    <action id="CodeElementSorter.Sort" class="com.sohocn.codeElementSorter.SortAction" text="Sort Members A-Z" description="Sort members in the current file">
+      <add-to-group group-id="EditorPopupMenu" anchor="last" />
+    </action>
+  </actions>
 </idea-plugin>
