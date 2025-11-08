@@ -1,24 +1,23 @@
 <idea-plugin>
   <version>1.0.0</version>
-  <idea-version since-build="241" />
+  <idea-version since-build="241" until-build="253.*" />
   <id>com.sohocn.codeElementSorter</id>
   <name>Code Element Sorter</name>
   <vendor email="215241062@qq.com">龙江湖</vendor>
   <description><![CDATA[Intelligent sorting of variables and methods in the current page, supporting both full-page sorting and selected region sorting modes.]]></description>
-
-  <!-- please see https://www.jetbrains.org/intellij/sdk/docs/basics/getting_started/plugin_compatibility.html
-       on how to target different products -->
   <depends>com.intellij.modules.platform</depends>
   <depends>com.intellij.modules.java</depends>
 
-  <extensions defaultExtensionNs="com.intellij">
-    <!-- Add your extensions here -->
-  </extensions>
-
   <actions>
-    <!-- 将动作直接添加到编辑器右键菜单 -->
-    <action id="CodeElementSorter.Sort" class="com.sohocn.codeElementSorter.SortAction" text="Sort Members A-Z" description="Sort members in the current file">
+    <action id="CodeElementSorter.Sort" 
+            class="com.sohocn.codeElementSorter.SortAction" 
+            text="Sort Members A-Z" 
+            description="Sort all variables and methods in the current file">
+      <add-to-group group-id="RefactoringMenu" anchor="after" relative-to-action="RearrangeCode" />
+      <add-to-group group-id="GenerateGroup" anchor="last" />
       <add-to-group group-id="EditorPopupMenu" anchor="last" />
+      <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt A" />
+      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt A" />
     </action>
   </actions>
 </idea-plugin>
