@@ -16,8 +16,6 @@
       <add-to-group group-id="RefactoringMenu" anchor="after" relative-to-action="RearrangeCode" />
       <add-to-group group-id="GenerateGroup" anchor="last" />
       <add-to-group group-id="EditorPopupMenu" anchor="last" />
-      <keyboard-shortcut keymap="$default" first-keystroke="ctrl alt A" />
-      <keyboard-shortcut keymap="Mac OS X" first-keystroke="meta alt A" />
     </action>
   </actions>
 </idea-plugin>
