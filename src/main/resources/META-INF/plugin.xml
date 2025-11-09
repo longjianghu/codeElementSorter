@@ -12,9 +12,7 @@
     <action id="CodeElementSorter.Sort" 
             class="com.sohocn.codeElementSorter.SortAction" 
             text="Sort Members A-Z" 
-            description="Sort all variables and methods in the current file">
-      <add-to-group group-id="RefactoringMenu" anchor="after" relative-to-action="RearrangeCode" />
-      <add-to-group group-id="GenerateGroup" anchor="last" />
+            description="Sort all or selected variables and methods based on user selection">
       <add-to-group group-id="EditorPopupMenu" anchor="last" />
     </action>
   </actions>

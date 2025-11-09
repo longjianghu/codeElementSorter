@@ -13,18 +13,23 @@
 
 ## 2. 核心功能特性
 
-### 2.1 单一操作模式
+### 2.1 智能排序模式
 
-#### 🔄 智能排序模式
-- **触发条件**：在任何Java文件中点击排序菜单项
+#### 🔄 全文件排序模式
+- **触发条件**：在任何Java文件中点击排序菜单项且未选择任何代码
 - **排序范围**：对整个当前打开的Java文件进行排序
 - **适用场景**：整体代码重构和规范化
+
+#### 🔄 选中部分排序模式
+- **触发条件**：在任何Java文件中选中部分代码后点击排序菜单项
+- **排序范围**：仅对选中的Java成员进行排序
+- **适用场景**：局部代码整理和优化
 
 ### 2.2 智能排序规则
 
 #### 排序优先级层次
 ```
-第一优先级：元素类型（变量 → 方法）
+第一优先级：元素类型分组（普通变量 → 注解变量 → 方法）
     ↓
 第二优先级：可见性（公共 → 私有）
     ↓  
@@ -32,14 +37,18 @@
 ```
 
 #### 详细排序顺序
-1. **公共变量** (`public` fields)
-2. **包私有变量** (无修饰符 fields)
-3. **受保护变量** (`protected` fields)
-4. **私有变量** (`private` fields)
-5. **公共方法** (`public` methods)
-6. **包私有方法** (无修饰符 methods)
-7. **受保护方法** (`protected` methods)
-8. **私有方法** (`private` methods)
+1. **普通公共变量** (`public` fields)
+2. **普通包私有变量** (无修饰符 fields)
+3. **普通受保护变量** (`protected` fields)
+4. **普通私有变量** (`private` fields)
+5. **注解公共变量** (`public` fields with annotations)
+6. **注解包私有变量** (无修饰符 fields with annotations)
+7. **注解受保护变量** (`protected` fields with annotations)
+8. **注解私有变量** (`private` fields with annotations)
+9. **公共方法** (`public` methods)
+10. **包私有方法** (无修饰符 methods)
+11. **受保护方法** (`protected` methods)
+12. **私有方法** (`private` methods)
 
 ### 2.3 深度字母排序
 - **A-Z字典序**：按元素名称进行字母顺序排序
@@ -50,13 +59,17 @@
 
 ### 3.1 智能右键菜单
 ```
-Refactor
-  ↳ Rearrange Code
-  ↳ 🔄 Sort Members A-Z                    ← 智能排序
+Editor Popup Menu
+  ↳ 🔄 Sort Members A-Z                    ← 智能排序（根据选择自动决定）
 ```
 
+#### 自动模式切换
+- **未选择代码时**：自动执行全文件排序
+- **选择部分代码时**：自动执行选中部分排序
+
 ### 3.2 操作反馈
-- **排序成功**：`"Sorted 8 elements: 3 fields, 5 methods"`
+- **全文件排序成功**：`"Sorted 8 elements: 3 fields, 5 methods"`
+- **选中部分排序成功**：`"Sorted 3 selected elements"`
 - **无元素警告**：`"No sortable elements found"`
 
 ## 4. 排序示例
@@ -85,18 +98,18 @@ public class UserService {
 ### 4.2 排序后代码
 ```java
 public class UserService {
+    // 普通变量区域（按可见性→名称深度排序）
+    public static final int MAX_RETRY = 3;
+    private Logger logger;
+    private String logPrefix;
+    private UserRepository repository;
+    
     // 注解变量区域（按可见性→名称深度排序）
     @Autowired
     private UserRepository userRepository;
     
     @Resource
     private UserService userService;
-    
-    // 普通变量区域（按可见性→名称深度排序）
-    public static final int MAX_RETRY = 3;
-    private Logger logger;
-    private String logPrefix;
-    private UserRepository repository;
     
     // 方法区域（按可见性→名称深度排序）
     public void createUser(User user) { }
@@ -122,10 +135,13 @@ public class UserService {
 #### 排序策略器 (SortingStrategy) 
 ```java
 // 实现分组排序规则
-- 注解变量分组 (按可见性→名称深度排序)
 - 普通变量分组 (按可见性→名称深度排序)
+- 注解变量分组 (按可见性→名称深度排序)
 - 方法分组 (按可见性→名称深度排序)
-- 组间分隔空行处理
+- 组间之间添加空行
+- 第一个元素前面不要添加空行
+- 如果变量带注释,也需要在变量后面添加空行
+- 如果变量使用/**这样的注解,在变量后面添加一个空行
 ```
 
 #### 模式检测器 (ModeDetector)
@@ -141,8 +157,8 @@ public class UserService {
 1. 解析当前文件或选择区域
 2. 识别所有可排序元素
 3. 应用分组排序规则：
-   - 注解变量分组排序（按可见性→名称深度排序）
    - 普通变量分组排序（按可见性→名称深度排序）
+   - 注解变量分组排序（按可见性→名称深度排序）
    - 方法分组排序（按可见性→名称深度排序）
    - 组间添加分隔空行
 4. 重新生成排序后的代码
@@ -224,3 +240,4 @@ public class UserService {
 ---
 
 **总结**：Code Element Sorter 插件通过智能的双模式排序机制，为开发者提供了一键整理代码结构的强大工具，显著提升代码的可读性和维护性，是团队协作和代码规范化的理想助手。
+
