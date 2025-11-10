@@ -50,6 +50,11 @@
 11. **受保护方法** (`protected` methods)
 12. **私有方法** (`private` methods)
 
+#### 格式化空行规则
+- **不同字段组之间**：在静态字段组、普通实例字段组、带注解的实例字段组之间添加空行
+- **元素后空行**：带 Javadoc 或注解的元素后添加空行
+- **类末尾清理**：移除类末尾的多余空行
+
 ### 2.3 深度字母排序
 - **A-Z字典序**：按元素名称进行字母顺序排序
 - **深度比较**：如果首字母相同，比较第二个字母，依此类推
@@ -103,14 +108,14 @@ public class UserService {
     private Logger logger;
     private String logPrefix;
     private UserRepository repository;
-    
+
     // 注解变量区域（按可见性→名称深度排序）
     @Autowired
     private UserRepository userRepository;
     
     @Resource
     private UserService userService;
-    
+
     // 方法区域（按可见性→名称深度排序）
     public void createUser(User user) { }
     public void deleteUser(Long id) { }
@@ -142,6 +147,8 @@ public class UserService {
 - 第一个元素前面不要添加空行
 - 如果变量带注释,也需要在变量后面添加空行
 - 如果变量使用/**这样的多行注释或带有注解,在变量后面添加一个空行
+- 移除类末尾的多余空行
+- 在不同字段组之间添加适当的空行
 ```
 
 #### 模式检测器 (ModeDetector)

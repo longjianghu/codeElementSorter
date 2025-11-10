@@ -501,6 +501,9 @@ public class SortAction extends AnAction {
                 lastAddedElement = addedElement;
             }
         }
+        
+        // Remove trailing whitespace/blank lines at the end of the class
+        removeTrailingWhitespace(psiClass);
     }
 
     private PsiElement createBlankLine(@NotNull Project project) {
@@ -517,6 +520,44 @@ public class SortAction extends AnAction {
             psiClass.add(whiteSpace);
         } catch (Exception e) {
             // Fails silently
+        }
+    }
+    
+    /**
+     * Remove trailing whitespace/blank lines at the end of the class
+     */
+    private void removeTrailingWhitespace(PsiClass psiClass) {
+        PsiElement[] children = psiClass.getChildren();
+        
+        // Iterate from the end of the class to find trailing whitespace
+        // We need to iterate backwards and collect all trailing whitespace elements
+        java.util.List<PsiElement> trailingWhitespace = new java.util.ArrayList<>();
+        
+        for (int i = children.length - 1; i >= 0; i--) {
+            PsiElement child = children[i];
+            
+            // Check if this element is whitespace containing only whitespace characters
+            if (child instanceof com.intellij.psi.PsiWhiteSpace) {
+                String text = child.getText();
+                if (text.trim().isEmpty()) {  // Only whitespace characters
+                    trailingWhitespace.add(child);
+                } else {
+                    // If we encounter whitespace with non-whitespace content, stop
+                    break;
+                }
+            } else {
+                // If the element is not whitespace, stop searching
+                break;
+            }
+        }
+        
+        // Delete all collected trailing whitespace elements
+        // We delete them in reverse order to maintain proper text offsets
+        for (int i = trailingWhitespace.size() - 1; i >= 0; i--) {
+            PsiElement whitespace = trailingWhitespace.get(i);
+            if (whitespace.isValid()) {
+                whitespace.delete();
+            }
         }
     }
 }
