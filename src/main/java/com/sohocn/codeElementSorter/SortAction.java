@@ -416,11 +416,15 @@ public class SortAction extends AnAction {
                 PsiElement element = staticFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Check if member has Javadoc or annotations and add blank line after
+                // Check if member has Javadoc or annotations and add blank line after (except for the very last element)
                 if (element instanceof PsiField && (hasJavadocComment(element) || hasAnnotations((PsiField) element))) {
-                    PsiElement blankLine = createBlankLine(project);
-                    if (blankLine != null) {
-                        psiClass.addAfter(blankLine, addedElement);
+                    // Only add blank line if this is not the absolute last element in the class
+                    boolean isLastElement = isLastElement(i, staticFieldCopies, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies);
+                    if (!isLastElement) {
+                        PsiElement blankLine = createBlankLine(project);
+                        if (blankLine != null) {
+                            psiClass.addAfter(blankLine, addedElement);
+                        }
                     }
                 }
                 lastAddedElement = addedElement;
@@ -441,11 +445,15 @@ public class SortAction extends AnAction {
                 PsiElement element = regularInstanceFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Check if member has Javadoc and add blank line after
+                // Check if member has Javadoc and add blank line after (except for the very last element)
                 if (element instanceof PsiField && hasJavadocComment(element)) {
-                    PsiElement blankLine = createBlankLine(project);
-                    if (blankLine != null) {
-                        psiClass.addAfter(blankLine, addedElement);
+                    // Only add blank line if this is not the absolute last element in the class
+                    boolean isLastElement = isLastElement(i, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies);
+                    if (!isLastElement) {
+                        PsiElement blankLine = createBlankLine(project);
+                        if (blankLine != null) {
+                            psiClass.addAfter(blankLine, addedElement);
+                        }
                     }
                 }
                 lastAddedElement = addedElement;
@@ -466,11 +474,15 @@ public class SortAction extends AnAction {
                 PsiElement element = annotatedInstanceFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // All annotated fields get blank line after them (per README)
+                // All annotated fields get blank line after them (per README), except the very last element
                 if (element instanceof PsiField) {
-                    PsiElement blankLine = createBlankLine(project);
-                    if (blankLine != null) {
-                        psiClass.addAfter(blankLine, addedElement);
+                    // Only add blank line if this is not the absolute last element in the class
+                    boolean isLastElement = isLastElement(i, annotatedInstanceFieldCopies, methodCopies);
+                    if (!isLastElement) {
+                        PsiElement blankLine = createBlankLine(project);
+                        if (blankLine != null) {
+                            psiClass.addAfter(blankLine, addedElement);
+                        }
                     }
                 }
                 lastAddedElement = addedElement;
@@ -491,19 +503,44 @@ public class SortAction extends AnAction {
                 PsiElement element = methodCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Check if method has Javadoc and add blank line after
+                // Check if method has Javadoc and add blank line after, but not after the last element
                 if (element instanceof PsiMethod && hasJavadocComment(element)) {
-                    PsiElement blankLine = createBlankLine(project);
-                    if (blankLine != null) {
-                        psiClass.addAfter(blankLine, addedElement);
+                    // Don't add blank line after the very last element
+                    if (i < methodCopies.size() - 1 || (!staticFieldCopies.isEmpty() || !regularInstanceFieldCopies.isEmpty() || 
+                        !annotatedInstanceFieldCopies.isEmpty())) {
+                        // Add blank line if this isn't the last element overall
+                        PsiElement blankLine = createBlankLine(project);
+                        if (blankLine != null) {
+                            psiClass.addAfter(blankLine, addedElement);
+                        }
                     }
                 }
                 lastAddedElement = addedElement;
             }
         }
         
-        // Remove trailing whitespace/blank lines at the end of the class
-        removeTrailingWhitespace(psiClass);
+        // Clean up any excessive whitespace between elements
+        cleanupExcessiveWhitespace(psiClass);
+    }
+    
+    /**
+     * Helper method to determine if the current element is the last element in the class
+     */
+    private boolean isLastElement(int currentIndex, List<?> currentGroup, List<?>... otherGroups) {
+        // If this is not the last element in the current group, return false
+        if (currentIndex < currentGroup.size() - 1) {
+            return false;
+        }
+        
+        // Check if any following groups have elements
+        for (List<?> group : otherGroups) {
+            if (!group.isEmpty()) {
+                return false; // There are more elements after this group
+            }
+        }
+        
+        // This is the last element in the last group
+        return true;
     }
 
     private PsiElement createBlankLine(@NotNull Project project) {
@@ -527,37 +564,103 @@ public class SortAction extends AnAction {
      * Remove trailing whitespace/blank lines at the end of the class
      */
     private void removeTrailingWhitespace(PsiClass psiClass) {
-        PsiElement[] children = psiClass.getChildren();
+        // Get a fresh list of children each time since deletion changes the array
+        java.util.List<PsiElement> childrenList = new java.util.ArrayList<>();
+        for (PsiElement element : psiClass.getChildren()) {
+            childrenList.add(element);
+        }
         
-        // Iterate from the end of the class to find trailing whitespace
-        // We need to iterate backwards and collect all trailing whitespace elements
-        java.util.List<PsiElement> trailingWhitespace = new java.util.ArrayList<>();
-        
-        for (int i = children.length - 1; i >= 0; i--) {
-            PsiElement child = children[i];
+        // Process from the end to find and remove all trailing whitespace
+        while (!childrenList.isEmpty()) {
+            PsiElement lastElement = childrenList.get(childrenList.size() - 1);
             
-            // Check if this element is whitespace containing only whitespace characters
-            if (child instanceof com.intellij.psi.PsiWhiteSpace) {
-                String text = child.getText();
+            if (lastElement instanceof com.intellij.psi.PsiWhiteSpace) {
+                String text = lastElement.getText();
                 if (text.trim().isEmpty()) {  // Only whitespace characters
-                    trailingWhitespace.add(child);
+                    try {
+                        lastElement.delete();
+                        // Update the list after deletion
+                        childrenList = new java.util.ArrayList<>();
+                        for (PsiElement element : psiClass.getChildren()) {
+                            childrenList.add(element);
+                        }
+                    } catch (Exception e) {
+                        // If deletion fails, stop the cleaning process
+                        break;
+                    }
                 } else {
-                    // If we encounter whitespace with non-whitespace content, stop
+                    // If the whitespace contains non-whitespace content, stop
                     break;
                 }
             } else {
-                // If the element is not whitespace, stop searching
+                // If the last element is not whitespace, we're done
                 break;
             }
         }
+    }
+    
+    /**
+     * Clean up excessive whitespace between elements, keeping only appropriate spacing
+     */
+    private void cleanupExcessiveWhitespace(PsiClass psiClass) {
+        // First, process whitespace between actual members
+        PsiElement[] children = psiClass.getChildren();
         
-        // Delete all collected trailing whitespace elements
-        // We delete them in reverse order to maintain proper text offsets
-        for (int i = trailingWhitespace.size() - 1; i >= 0; i--) {
-            PsiElement whitespace = trailingWhitespace.get(i);
-            if (whitespace.isValid()) {
-                whitespace.delete();
+        // Create a list to track elements to be processed
+        java.util.List<PsiElement> elementsToProcess = new java.util.ArrayList<>();
+        for (PsiElement element : children) {
+            elementsToProcess.add(element);
+        }
+        
+        // Process whitespace elements to reduce excessive spacing
+        for (int i = 0; i < elementsToProcess.size(); i++) {
+            PsiElement current = elementsToProcess.get(i);
+            
+            // If current element is whitespace, check if it's excessive
+            if (current instanceof com.intellij.psi.PsiWhiteSpace) {
+                String text = current.getText();
+                
+                // Count the number of newline characters in the whitespace
+                long newlineCount = text.chars().filter(ch -> ch == '\n').count();
+                
+                // If there are more than 2 newlines (meaning more than one blank line), 
+                // we need to reduce it
+                if (newlineCount > 2) {
+                    try {
+                        // Replace with just one blank line (\n\n represents one blank line)
+                        PsiElement newWhiteSpace = PsiParserFacade.getInstance(psiClass.getProject())
+                            .createWhiteSpaceFromText("\n\n");
+                        
+                        // Add the new whitespace after the previous element in the original children array
+                        // We need to get the current list of children again since the array may have changed
+                        PsiElement[] currentChildren = psiClass.getChildren();
+                        int currentIndex = -1;
+                        for (int j = 0; j < currentChildren.length; j++) {
+                            if (currentChildren[j].equals(current)) {
+                                currentIndex = j;
+                                break;
+                            }
+                        }
+                        
+                        if (currentIndex > 0) {
+                            PsiElement prevElement = currentChildren[currentIndex - 1];
+                            psiClass.addAfter(newWhiteSpace, prevElement);
+                        } else {
+                            // If this is the first element, add at the beginning
+                            psiClass.add(newWhiteSpace);
+                        }
+                        
+                        // Delete the old excessive whitespace
+                        current.delete();
+                    } catch (Exception e) {
+                        // If replacement fails, continue with other elements
+                    }
+                }
             }
         }
+        
+        // Perform a final pass to remove trailing whitespace,
+        // in case the above operations created new trailing whitespace
+        removeTrailingWhitespace(psiClass);
     }
 }
