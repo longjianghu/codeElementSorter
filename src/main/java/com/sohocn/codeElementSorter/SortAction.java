@@ -393,61 +393,95 @@ public class SortAction extends AnAction {
                                        List<PsiElement> annotatedInstanceFieldCopies,
                                        List<PsiElement> methodCopies) {
 
-        boolean hasContent = false;
+        // Get all existing class members to use as reference points
+        PsiElement[] existingChildren = psiClass.getChildren();
+        
+        // Remove all existing members we're replacing
+        List<PsiElement> elementsToRemove = new ArrayList<>();
+        for (PsiElement child : existingChildren) {
+            if (child instanceof PsiField || child instanceof PsiMethod) {
+                elementsToRemove.add(child);
+            }
+        }
+        
+        // Remove existing elements
+        for (PsiElement element : elementsToRemove) {
+            element.delete();
+        }
 
         // Add static fields
         if (!staticFieldCopies.isEmpty()) {
-            for (PsiElement element : staticFieldCopies) {
-                psiClass.add(element);
+            for (int i = 0; i < staticFieldCopies.size(); i++) {
+                PsiElement element = staticFieldCopies.get(i);
+                PsiElement addedElement = psiClass.add(element);
+                
+                // Check if member has Javadoc or annotations and add blank line after
                 if (element instanceof PsiField && (hasJavadocComment(element) || hasAnnotations((PsiField) element))) {
-                    addBlankLine(project, psiClass);
+                    PsiElement blankLine = createBlankLine(project);
+                    if (blankLine != null) {
+                        psiClass.addAfter(blankLine, addedElement);
+                    }
                 }
             }
-            hasContent = true;
         }
 
         // Add regular instance fields
         if (!regularInstanceFieldCopies.isEmpty()) {
-            if (hasContent) {
-                addBlankLine(project, psiClass);
-            }
-            for (PsiElement element : regularInstanceFieldCopies) {
-                psiClass.add(element);
+            for (int i = 0; i < regularInstanceFieldCopies.size(); i++) {
+                PsiElement element = regularInstanceFieldCopies.get(i);
+                PsiElement addedElement = psiClass.add(element);
+                
+                // Check if member has Javadoc and add blank line after
                 if (element instanceof PsiField && hasJavadocComment(element)) {
-                    addBlankLine(project, psiClass);
+                    PsiElement blankLine = createBlankLine(project);
+                    if (blankLine != null) {
+                        psiClass.addAfter(blankLine, addedElement);
+                    }
                 }
             }
-            hasContent = true;
         }
 
         // Add annotated instance fields
         if (!annotatedInstanceFieldCopies.isEmpty()) {
-            if (hasContent) {
-                addBlankLine(project, psiClass);
-            }
-            for (PsiElement element : annotatedInstanceFieldCopies) {
-                psiClass.add(element);
+            for (int i = 0; i < annotatedInstanceFieldCopies.size(); i++) {
+                PsiElement element = annotatedInstanceFieldCopies.get(i);
+                PsiElement addedElement = psiClass.add(element);
+                
+                // All annotated fields get blank line after them (per README)
                 if (element instanceof PsiField) {
-                    addBlankLine(project, psiClass);
+                    PsiElement blankLine = createBlankLine(project);
+                    if (blankLine != null) {
+                        psiClass.addAfter(blankLine, addedElement);
+                    }
                 }
             }
-            hasContent = true;
         }
 
         // Add methods
         if (!methodCopies.isEmpty()) {
-            if (hasContent) {
-                addBlankLine(project, psiClass);
-            }
-            for (PsiElement element : methodCopies) {
-                psiClass.add(element);
+            for (int i = 0; i < methodCopies.size(); i++) {
+                PsiElement element = methodCopies.get(i);
+                PsiElement addedElement = psiClass.add(element);
+                
+                // Check if method has Javadoc and add blank line after
                 if (element instanceof PsiMethod && hasJavadocComment(element)) {
-                    addBlankLine(project, psiClass);
+                    PsiElement blankLine = createBlankLine(project);
+                    if (blankLine != null) {
+                        psiClass.addAfter(blankLine, addedElement);
+                    }
                 }
             }
         }
     }
 
+    private PsiElement createBlankLine(@NotNull Project project) {
+        try {
+            return PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n\n");
+        } catch (Exception e) {
+            return null;
+        }
+    }
+    
     private void addBlankLine(@NotNull Project project, PsiClass psiClass) {
         try {
             PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n\n");
