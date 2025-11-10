@@ -15,7 +15,7 @@ repositories {
 // Read more: https://plugins.jetbrains.com/docs/intellij/tools-gradle-intellij-plugin.html
 intellij {
     version.set("2024.1.1")
-    type.set("IU")
+    type.set("IC")
 
     plugins.set(listOf(
         "com.intellij.java" // 添加Java插件依赖

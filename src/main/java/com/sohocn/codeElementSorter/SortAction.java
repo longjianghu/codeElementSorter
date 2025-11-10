@@ -242,6 +242,56 @@ public class SortAction extends AnAction {
     }
     
     /**
+     * Perform sorting for selected members only
+     */
+    private void performSelectedSorting(@NotNull Project project, PsiClass psiClass, List<PsiMember> membersToSort) {
+        // Filter out only fields and methods from the selected members
+        List<PsiMember> sortableMembers = membersToSort.stream()
+                .filter(member -> member instanceof PsiField || member instanceof PsiMethod)
+                .collect(Collectors.toList());
+
+        if (sortableMembers.isEmpty()) {
+            return;
+        }
+
+        // Sort using the comparator
+        sortableMembers.sort(new CodeElementSortComparator());
+
+        // Create copies of elements before deleting the originals
+        List<PsiElement> copies = new ArrayList<>();
+        for (PsiMember member : sortableMembers) {
+            copies.add((PsiElement) member.copy());
+        }
+
+        // Delete all original selected sortable members
+        deleteMembers(psiClass, sortableMembers);
+
+        // Add members back in sorted order
+        for (PsiElement copy : copies) {
+            psiClass.add(copy);
+        }
+    }
+    
+    /**
+     * Check if the element has a Javadoc comment
+     */
+    private boolean hasJavadocComment(PsiElement element) {
+        PsiElement prevSibling = element.getPrevSibling();
+        while (prevSibling != null) {
+            if (prevSibling instanceof PsiComment) {
+                String commentText = prevSibling.getText();
+                if (commentText.startsWith("/**")) {
+                    return true;
+                }
+            } else if (prevSibling.getNode().getElementType() != com.intellij.psi.JavaTokenType.WHITE_SPACE) {
+                // If we encounter a non-comment, non-whitespace element, stop searching
+                break;
+            }
+            prevSibling = prevSibling.getPrevSibling();
+        }
+        return false;
+    }
+    
     /**
      * Add all members back to the class with appropriate spacing
      */
@@ -316,3 +366,4 @@ public class SortAction extends AnAction {
             }
         }
     }
+}
