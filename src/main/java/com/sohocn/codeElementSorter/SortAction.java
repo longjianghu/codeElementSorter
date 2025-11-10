@@ -176,41 +176,51 @@ public class SortAction extends AnAction {
      */
     private void performFullSorting(@NotNull Project project, PsiClass psiClass, List<PsiMember> sortableMembers) {
         // Group fields and methods separately according to README rules
-        // Group 1: Regular variables (sorted by visibility and name) - following README order
-        List<PsiField> regularFields = sortableMembers.stream()
+        
+        // Group 1: Static fields
+        List<PsiField> staticFields = sortableMembers.stream()
             .filter(m -> m instanceof PsiField)
             .map(m -> (PsiField) m)
-            .filter(field -> field.getAnnotations().length == 0)
+            .filter(field -> field.hasModifierProperty(PsiModifier.STATIC))
             .collect(Collectors.toList());
-        
-        // Group 2: Annotation variables (sorted by visibility and name) - following README rules
-        List<PsiField> annotatedFields = sortableMembers.stream()
+
+        // Group 2: Regular instance variables (unannotated)
+        List<PsiField> regularInstanceFields = sortableMembers.stream()
             .filter(m -> m instanceof PsiField)
             .map(m -> (PsiField) m)
-            .filter(field -> field.getAnnotations().length > 0)
+            .filter(field -> !field.hasModifierProperty(PsiModifier.STATIC) && field.getAnnotations().length == 0)
             .collect(Collectors.toList());
         
-        // Group 3: Methods (sorted by visibility and name) 
+        // Group 3: Annotated instance variables
+        List<PsiField> annotatedInstanceFields = sortableMembers.stream()
+            .filter(m -> m instanceof PsiField)
+            .map(m -> (PsiField) m)
+            .filter(field -> !field.hasModifierProperty(PsiModifier.STATIC) && field.getAnnotations().length > 0)
+            .collect(Collectors.toList());
+        
+        // Group 4: Methods
         List<PsiMethod> methods = sortableMembers.stream()
             .filter(m -> m instanceof PsiMethod)
             .map(m -> (PsiMethod) m)
             .collect(Collectors.toList());
         
         // Sort each group using the comparator
-        regularFields.sort(new CodeElementSortComparator());
-        annotatedFields.sort(new CodeElementSortComparator());
+        staticFields.sort(new CodeElementSortComparator());
+        regularInstanceFields.sort(new CodeElementSortComparator());
+        annotatedInstanceFields.sort(new CodeElementSortComparator());
         methods.sort(new CodeElementSortComparator());
 
         // Create copies of the sorted members - this must be done before deletion
-        List<PsiElement> regularFieldCopies = createElementCopiesWithRelatedElements(regularFields);
-        List<PsiElement> annotatedFieldCopies = createElementCopiesWithRelatedElements(annotatedFields);
+        List<PsiElement> staticFieldCopies = createElementCopiesWithRelatedElements(staticFields);
+        List<PsiElement> regularInstanceFieldCopies = createElementCopiesWithRelatedElements(regularInstanceFields);
+        List<PsiElement> annotatedInstanceFieldCopies = createElementCopiesWithRelatedElements(annotatedInstanceFields);
         List<PsiElement> methodCopies = createElementCopiesWithRelatedElements(methods);
 
         // Delete all original sortable members (this will remove them and their preceding comments)
         deleteMembersWithComments(psiClass, sortableMembers);
 
         // Add members back in the correct order with appropriate spacing
-        addMembersWithSpacing(project, psiClass, regularFieldCopies, annotatedFieldCopies, methodCopies);
+        addMembersWithSpacing(project, psiClass, staticFieldCopies, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies);
     }
     
     /**
@@ -317,18 +327,8 @@ public class SortAction extends AnAction {
      * Check if the element has a Javadoc comment
      */
     private boolean hasJavadocComment(PsiElement element) {
-        PsiElement prevSibling = element.getPrevSibling();
-        while (prevSibling != null) {
-            if (prevSibling instanceof PsiComment) {
-                String commentText = prevSibling.getText();
-                if (commentText.startsWith("/**")) {
-                    return true;
-                }
-            } else if (prevSibling.getNode().getElementType() != com.intellij.psi.JavaTokenType.WHITE_SPACE) {
-                // If we encounter a non-comment, non-whitespace element, stop searching
-                break;
-            }
-            prevSibling = prevSibling.getPrevSibling();
+        if (element instanceof PsiDocCommentOwner) {
+            return ((PsiDocCommentOwner) element).getDocComment() != null;
         }
         return false;
     }
@@ -387,91 +387,73 @@ public class SortAction extends AnAction {
     /**
      * Add all members back to the class with appropriate spacing
      */
-    private void addMembersWithSpacing(@NotNull Project project, PsiClass psiClass, 
-                                      List<PsiElement> regularFieldCopies,
-                                      List<PsiElement> annotatedFieldCopies,
-                                      List<PsiElement> methodCopies) {
-        // Track if we have any fields to know if we need spacing before methods
-        boolean hasFields = !regularFieldCopies.isEmpty() || !annotatedFieldCopies.isEmpty();
-        
-        // Add all regular field copies first (if any)
-        for (int i = 0; i < regularFieldCopies.size(); i++) {
-            PsiElement element = regularFieldCopies.get(i);
-            psiClass.add(element);
-            
-            // Add blank line after regular field if it has Javadoc comment
-            if (element instanceof PsiField) {
-                // Check if the next element in the list is a related comment that is a Javadoc
-                // Since we have the field and potentially its related comments together
-                // we need a different approach to detect this
-                PsiField field = (PsiField) element;
-                if (hasJavadocComment(field)) {
-                    try {
-                        PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                        psiClass.add(whiteSpace);
-                    } catch (Exception e) {
-                        // Continue without adding whitespace if it fails
-                    }
+    private void addMembersWithSpacing(@NotNull Project project, PsiClass psiClass,
+                                       List<PsiElement> staticFieldCopies,
+                                       List<PsiElement> regularInstanceFieldCopies,
+                                       List<PsiElement> annotatedInstanceFieldCopies,
+                                       List<PsiElement> methodCopies) {
+
+        boolean hasContent = false;
+
+        // Add static fields
+        if (!staticFieldCopies.isEmpty()) {
+            for (PsiElement element : staticFieldCopies) {
+                psiClass.add(element);
+                if (element instanceof PsiField && (hasJavadocComment(element) || hasAnnotations((PsiField) element))) {
+                    addBlankLine(project, psiClass);
+                }
+            }
+            hasContent = true;
+        }
+
+        // Add regular instance fields
+        if (!regularInstanceFieldCopies.isEmpty()) {
+            if (hasContent) {
+                addBlankLine(project, psiClass);
+            }
+            for (PsiElement element : regularInstanceFieldCopies) {
+                psiClass.add(element);
+                if (element instanceof PsiField && hasJavadocComment(element)) {
+                    addBlankLine(project, psiClass);
+                }
+            }
+            hasContent = true;
+        }
+
+        // Add annotated instance fields
+        if (!annotatedInstanceFieldCopies.isEmpty()) {
+            if (hasContent) {
+                addBlankLine(project, psiClass);
+            }
+            for (PsiElement element : annotatedInstanceFieldCopies) {
+                psiClass.add(element);
+                if (element instanceof PsiField) {
+                    addBlankLine(project, psiClass);
+                }
+            }
+            hasContent = true;
+        }
+
+        // Add methods
+        if (!methodCopies.isEmpty()) {
+            if (hasContent) {
+                addBlankLine(project, psiClass);
+            }
+            for (PsiElement element : methodCopies) {
+                psiClass.add(element);
+                if (element instanceof PsiMethod && hasJavadocComment(element)) {
+                    addBlankLine(project, psiClass);
                 }
             }
         }
-        
-        // Add annotated fields after regular fields with a blank line if there are both regular and annotated fields
-        if (!annotatedFieldCopies.isEmpty() && !regularFieldCopies.isEmpty()) {
-            // Add a blank line between regular fields and annotated fields
-            try {
-                PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                psiClass.add(whiteSpace);
-            } catch (Exception e) {
-                // Continue without adding whitespace if it fails
-            }
-        }
-        
-        // Add annotated field copies
-        for (int i = 0; i < annotatedFieldCopies.size(); i++) {
-            PsiElement element = annotatedFieldCopies.get(i);
-            psiClass.add(element);
-            
-            // According to README.md: "如果变量使用/**这样的多行注释或带有注解,在变量后面添加一个空行"
-            // Add blank line after annotated field (since it has annotations)
-            if (element instanceof PsiField) {
-                try {
-                    PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                    psiClass.add(whiteSpace);
-                } catch (Exception e) {
-                    // Continue without adding whitespace if it fails
-                }
-            }
-        }
-        
-        // Add methods after fields with a blank line if there are methods and fields exist
-        if (!methodCopies.isEmpty() && hasFields) {
-            // Add a blank line between fields and methods
-            try {
-                PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                psiClass.add(whiteSpace);
-            } catch (Exception e) {
-                // Continue without adding whitespace if it fails
-            }
-        }
-        
-        // Add all method copies
-        for (int i = 0; i < methodCopies.size(); i++) {
-            PsiElement element = methodCopies.get(i);
-            psiClass.add(element);
-            
-            // Add blank line after method if it has a Javadoc comment
-            if (element instanceof PsiMethod) {
-                PsiMethod method = (PsiMethod) element;
-                if (hasJavadocComment(method)) {
-                    try {
-                        PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                        psiClass.add(whiteSpace);
-                    } catch (Exception e) {
-                        // Continue without adding whitespace if it fails
-                    }
-                }
-            }
+    }
+
+    private void addBlankLine(@NotNull Project project, PsiClass psiClass) {
+        try {
+            PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n\n");
+            psiClass.add(whiteSpace);
+        } catch (Exception e) {
+            // Fails silently
         }
     }
 }

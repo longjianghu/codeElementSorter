@@ -16,14 +16,20 @@ public class CodeElementSortComparator implements Comparator<PsiMember> {
         if (typeComparison != 0) {
             return typeComparison;
         }
+
+        // Second priority: Static modifier (static before non-static)
+        int staticComparison = compareByStatic(member1, member2);
+        if (staticComparison != 0) {
+            return staticComparison;
+        }
         
-        // Second priority: Visibility (public before package-private before protected before private)
+        // Third priority: Visibility (public before package-private before protected before private)
         int visibilityComparison = compareByVisibility(member1, member2);
         if (visibilityComparison != 0) {
             return visibilityComparison;
         }
         
-        // Third priority: Name in alphabetical order (case-insensitive)
+        // Fourth priority: Name in alphabetical order (case-insensitive)
         return compareByName(member1, member2);
     }
     
@@ -38,6 +44,19 @@ public class CodeElementSortComparator implements Comparator<PsiMember> {
             return 1;
         } else {
             return 0; // Same type
+        }
+    }
+
+    private int compareByStatic(PsiMember member1, PsiMember member2) {
+        boolean isStatic1 = member1.hasModifierProperty(PsiModifier.STATIC);
+        boolean isStatic2 = member2.hasModifierProperty(PsiModifier.STATIC);
+
+        if (isStatic1 && !isStatic2) {
+            return -1; // Static members first
+        } else if (!isStatic1 && isStatic2) {
+            return 1;
+        } else {
+            return 0; // Both are static or both are not
         }
     }
     
