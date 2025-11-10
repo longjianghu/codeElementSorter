@@ -15,6 +15,11 @@ import java.util.*;
 import java.util.stream.Collectors;
 
 public class SortAction extends AnAction {
+    
+    @Override
+    public @NotNull ActionUpdateThread getActionUpdateThread() {
+        return ActionUpdateThread.BGT;
+    }
 
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
@@ -178,14 +183,14 @@ public class SortAction extends AnAction {
             .filter(field -> field.getAnnotations().length == 0)
             .collect(Collectors.toList());
         
-        // Group 2: Annotation variables (sorted by visibility and name) - following README order
+        // Group 2: Annotation variables (sorted by visibility and name) - following README rules
         List<PsiField> annotatedFields = sortableMembers.stream()
             .filter(m -> m instanceof PsiField)
             .map(m -> (PsiField) m)
             .filter(field -> field.getAnnotations().length > 0)
             .collect(Collectors.toList());
         
-        // Group 3: Methods (sorted by visibility and name)
+        // Group 3: Methods (sorted by visibility and name) 
         List<PsiMethod> methods = sortableMembers.stream()
             .filter(m -> m instanceof PsiMethod)
             .map(m -> (PsiMethod) m)
@@ -196,16 +201,16 @@ public class SortAction extends AnAction {
         annotatedFields.sort(new CodeElementSortComparator());
         methods.sort(new CodeElementSortComparator());
 
-        // Create copies of elements before deleting the originals
-        List<PsiField> regularFieldsCopies = createFieldCopies(regularFields);
-        List<PsiField> annotatedFieldsCopies = createFieldCopies(annotatedFields);
-        List<PsiMethod> methodsCopies = createMethodCopies(methods);
+        // Create copies of the sorted members - this must be done before deletion
+        List<PsiElement> regularFieldCopies = createElementCopiesWithRelatedElements(regularFields);
+        List<PsiElement> annotatedFieldCopies = createElementCopiesWithRelatedElements(annotatedFields);
+        List<PsiElement> methodCopies = createElementCopiesWithRelatedElements(methods);
 
-        // Delete all original sortable members
-        deleteMembers(psiClass, sortableMembers);
+        // Delete all original sortable members (this will remove them and their preceding comments)
+        deleteMembersWithComments(psiClass, sortableMembers);
 
         // Add members back in the correct order with appropriate spacing
-        addMembersWithSpacing(project, psiClass, regularFieldsCopies, annotatedFieldsCopies, methodsCopies);
+        addMembersWithSpacing(project, psiClass, regularFieldCopies, annotatedFieldCopies, methodCopies);
     }
     
     /**
@@ -231,6 +236,23 @@ public class SortAction extends AnAction {
     }
     
     /**
+     * Create copies of list of PSI elements (fields/methods with their comments)
+     */
+    private List<PsiElement> createElementCopiesWithComments(List<? extends PsiMember> members) {
+        List<PsiElement> copies = new ArrayList<>();
+        for (PsiMember member : members) {
+            // Get related comments and annotations that should move with the member
+            List<PsiElement> relatedElements = getRelatedElements(member);
+            for (PsiElement element : relatedElements) {
+                copies.add((PsiElement) element.copy());
+            }
+            // Add the member itself
+            copies.add((PsiElement) member.copy());
+        }
+        return copies;
+    }
+    
+    /**
      * Delete a list of members from the class
      */
     private void deleteMembers(PsiClass psiClass, List<PsiMember> membersToDelete) {
@@ -238,6 +260,28 @@ public class SortAction extends AnAction {
         membersToDelete.sort((a, b) -> b.getTextRange().getStartOffset() - a.getTextRange().getStartOffset());
         for (PsiMember member : membersToDelete) {
             member.delete();
+        }
+    }
+    
+    /**
+     * Delete a list of members from the class
+     */
+    private void deleteMembersWithComments(PsiClass psiClass, List<PsiMember> membersToDelete) {
+        // Delete from last to first to maintain text offsets
+        membersToDelete.sort((a, b) -> b.getTextRange().getStartOffset() - a.getTextRange().getStartOffset());
+        for (PsiMember member : membersToDelete) {
+            // Get related comments first (before deleting the member)
+            List<PsiElement> relatedElements = getRelatedElements(member);
+            // Delete related elements first
+            for (PsiElement element : relatedElements) {
+                if (element.isValid()) {
+                    element.delete();
+                }
+            }
+            // Then delete the member itself
+            if (member.isValid()) {
+                member.delete();
+            }
         }
     }
     
@@ -257,16 +301,13 @@ public class SortAction extends AnAction {
         // Sort using the comparator
         sortableMembers.sort(new CodeElementSortComparator());
 
-        // Create copies of elements before deleting the originals
-        List<PsiElement> copies = new ArrayList<>();
-        for (PsiMember member : sortableMembers) {
-            copies.add((PsiElement) member.copy());
-        }
+        // Delete all original selected sortable members and their related comments
+        deleteMembersWithComments(psiClass, sortableMembers);
 
-        // Delete all original selected sortable members
-        deleteMembers(psiClass, sortableMembers);
+        // Create copies of elements (with their related comments/annotations)
+        List<PsiElement> copies = createElementCopiesWithComments(sortableMembers);
 
-        // Add members back in sorted order
+        // Add members back in sorted order with their comments
         for (PsiElement copy : copies) {
             psiClass.add(copy);
         }
@@ -293,44 +334,107 @@ public class SortAction extends AnAction {
     }
     
     /**
+     * Check if the field has annotations
+     */
+    private boolean hasAnnotations(PsiField field) {
+        return field.getAnnotations().length > 0;
+    }
+    
+    /**
+     * Create copies of list of PSI elements with their related elements
+     */
+    private List<PsiElement> createElementCopiesWithRelatedElements(List<? extends PsiMember> members) {
+        List<PsiElement> allCopies = new ArrayList<>();
+        for (PsiMember member : members) {
+            // Get related comments that should move with the member
+            List<PsiElement> relatedElements = getRelatedElements(member);
+            for (PsiElement element : relatedElements) {
+                if (element.isValid()) {
+                    allCopies.add((PsiElement) element.copy());
+                }
+            }
+            // Add the member itself if it's valid
+            if (member.isValid()) {
+                allCopies.add((PsiElement) member.copy());
+            }
+        }
+        return allCopies;
+    }
+    
+    /**
+     * Get all elements that should be moved with the member (comments and whitespace)
+     */
+    private List<PsiElement> getRelatedElements(PsiMember member) {
+        List<PsiElement> relatedElements = new ArrayList<>();
+        
+        // Look for preceding comments and whitespace
+        PsiElement prevSibling = member.getPrevSibling();
+        while (prevSibling != null) {
+            if (prevSibling instanceof PsiComment || 
+                prevSibling instanceof PsiWhiteSpace) {
+                // Only include comments and whitespace that come before the member
+                relatedElements.add(0, prevSibling); // Add to the beginning to maintain order
+                prevSibling = prevSibling.getPrevSibling();
+            } else {
+                // Stop if we encounter something that's not a comment or whitespace
+                break;
+            }
+        }
+        
+        return relatedElements;
+    }
+    
+    /**
      * Add all members back to the class with appropriate spacing
      */
     private void addMembersWithSpacing(@NotNull Project project, PsiClass psiClass, 
-                                      List<PsiField> regularFieldsCopies,
-                                      List<PsiField> annotatedFieldsCopies,
-                                      List<PsiMethod> methodsCopies) {
-        // Add all regular fields first (if any)
-        for (PsiField field : regularFieldsCopies) {
-            psiClass.add(field);
+                                      List<PsiElement> regularFieldCopies,
+                                      List<PsiElement> annotatedFieldCopies,
+                                      List<PsiElement> methodCopies) {
+        // Track if we have any fields to know if we need spacing before methods
+        boolean hasFields = !regularFieldCopies.isEmpty() || !annotatedFieldCopies.isEmpty();
+        
+        // Add all regular field copies first (if any)
+        for (int i = 0; i < regularFieldCopies.size(); i++) {
+            PsiElement element = regularFieldCopies.get(i);
+            psiClass.add(element);
             
             // Add blank line after regular field if it has Javadoc comment
-            if (hasJavadocComment(field)) {
-                try {
-                    PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                    psiClass.add(whiteSpace);
-                } catch (Exception e) {
-                    // Continue without adding whitespace if it fails
+            if (element instanceof PsiField) {
+                // Check if the next element in the list is a related comment that is a Javadoc
+                // Since we have the field and potentially its related comments together
+                // we need a different approach to detect this
+                PsiField field = (PsiField) element;
+                if (hasJavadocComment(field)) {
+                    try {
+                        PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                        psiClass.add(whiteSpace);
+                    } catch (Exception e) {
+                        // Continue without adding whitespace if it fails
+                    }
                 }
             }
         }
         
-        // Add annotated fields after regular fields with a blank line if there are annotated fields
-        if (!annotatedFieldsCopies.isEmpty()) {
-            if (!regularFieldsCopies.isEmpty()) {
-                // Add a blank line between regular fields and annotated fields
-                try {
-                    PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                    psiClass.add(whiteSpace);
-                } catch (Exception e) {
-                    // Continue without adding whitespace if it fails
-                }
+        // Add annotated fields after regular fields with a blank line if there are both regular and annotated fields
+        if (!annotatedFieldCopies.isEmpty() && !regularFieldCopies.isEmpty()) {
+            // Add a blank line between regular fields and annotated fields
+            try {
+                PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                psiClass.add(whiteSpace);
+            } catch (Exception e) {
+                // Continue without adding whitespace if it fails
             }
+        }
+        
+        // Add annotated field copies
+        for (int i = 0; i < annotatedFieldCopies.size(); i++) {
+            PsiElement element = annotatedFieldCopies.get(i);
+            psiClass.add(element);
             
-            for (PsiField field : annotatedFieldsCopies) {
-                psiClass.add(field);
-                
-                // According to README.md: "如果变量使用/**这样的多行注释或带有注解,在变量后面添加一个空行"
-                // Add blank line after annotated field (since it has annotations)
+            // According to README.md: "如果变量使用/**这样的多行注释或带有注解,在变量后面添加一个空行"
+            // Add blank line after annotated field (since it has annotations)
+            if (element instanceof PsiField) {
                 try {
                     PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
                     psiClass.add(whiteSpace);
@@ -341,7 +445,7 @@ public class SortAction extends AnAction {
         }
         
         // Add methods after fields with a blank line if there are methods and fields exist
-        if (!methodsCopies.isEmpty() && (!regularFieldsCopies.isEmpty() || !annotatedFieldsCopies.isEmpty())) {
+        if (!methodCopies.isEmpty() && hasFields) {
             // Add a blank line between fields and methods
             try {
                 PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
@@ -351,17 +455,21 @@ public class SortAction extends AnAction {
             }
         }
         
-        // Add all methods
-        for (PsiMethod method : methodsCopies) {
-            psiClass.add(method);
+        // Add all method copies
+        for (int i = 0; i < methodCopies.size(); i++) {
+            PsiElement element = methodCopies.get(i);
+            psiClass.add(element);
             
             // Add blank line after method if it has a Javadoc comment
-            if (hasJavadocComment(method)) {
-                try {
-                    PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                    psiClass.add(whiteSpace);
-                } catch (Exception e) {
-                    // Continue without adding whitespace if it fails
+            if (element instanceof PsiMethod) {
+                PsiMethod method = (PsiMethod) element;
+                if (hasJavadocComment(method)) {
+                    try {
+                        PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                        psiClass.add(whiteSpace);
+                    } catch (Exception e) {
+                        // Continue without adding whitespace if it fails
+                    }
                 }
             }
         }
