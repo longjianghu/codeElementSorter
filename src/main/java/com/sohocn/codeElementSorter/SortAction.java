@@ -410,6 +410,7 @@ public class SortAction extends AnAction {
         }
 
         // Add static fields
+        PsiElement lastAddedElement = null;
         if (!staticFieldCopies.isEmpty()) {
             for (int i = 0; i < staticFieldCopies.size(); i++) {
                 PsiElement element = staticFieldCopies.get(i);
@@ -421,6 +422,15 @@ public class SortAction extends AnAction {
                     if (blankLine != null) {
                         psiClass.addAfter(blankLine, addedElement);
                     }
+                }
+                lastAddedElement = addedElement;
+            }
+            
+            // Add a blank line between static fields and other field types, if there are other fields
+            if (!regularInstanceFieldCopies.isEmpty() || !annotatedInstanceFieldCopies.isEmpty()) {
+                PsiElement blankLine = createBlankLine(project);
+                if (blankLine != null) {
+                    psiClass.addAfter(blankLine, lastAddedElement);
                 }
             }
         }
@@ -438,6 +448,15 @@ public class SortAction extends AnAction {
                         psiClass.addAfter(blankLine, addedElement);
                     }
                 }
+                lastAddedElement = addedElement;
+            }
+            
+            // Add a blank line between regular instance fields and annotated instance fields/methods, if there are such fields/methods
+            if (!annotatedInstanceFieldCopies.isEmpty() || !methodCopies.isEmpty()) {
+                PsiElement blankLine = createBlankLine(project);
+                if (blankLine != null) {
+                    psiClass.addAfter(blankLine, lastAddedElement);
+                }
             }
         }
 
@@ -453,6 +472,15 @@ public class SortAction extends AnAction {
                     if (blankLine != null) {
                         psiClass.addAfter(blankLine, addedElement);
                     }
+                }
+                lastAddedElement = addedElement;
+            }
+            
+            // Add a blank line between annotated instance fields and methods, if there are methods
+            if (!methodCopies.isEmpty()) {
+                PsiElement blankLine = createBlankLine(project);
+                if (blankLine != null) {
+                    psiClass.addAfter(blankLine, lastAddedElement);
                 }
             }
         }
@@ -470,6 +498,7 @@ public class SortAction extends AnAction {
                         psiClass.addAfter(blankLine, addedElement);
                     }
                 }
+                lastAddedElement = addedElement;
             }
         }
     }
