@@ -33,7 +33,7 @@ public class SortAction extends AnAction {
         }
 
         SelectionModel selectionModel = editor.getSelectionModel();
-        
+
         // 根据用户是否选择代码来决定执行全文件排序还是选中部分排序
         if (selectionModel.hasSelection()) {
             // 用户选择了代码，执行选中部分排序
@@ -146,170 +146,11 @@ public class SortAction extends AnAction {
         // Apply changes to the file
         WriteCommandAction.runWriteCommandAction(project, () -> {
             if (membersToSort == null) {
-                // Group fields and methods separately according to README rules
-                // Group 1: Regular variables (sorted by visibility and name) - following README order
-                List<PsiField> regularFields = sortableMembers.stream()
-                    .filter(m -> m instanceof PsiField)
-                    .map(m -> (PsiField) m)
-                    .filter(field -> field.getAnnotations().length == 0)
-                    .collect(Collectors.toList());
-                
-                // Group 2: Annotation variables (sorted by visibility and name) - following README order
-                List<PsiField> annotatedFields = sortableMembers.stream()
-                    .filter(m -> m instanceof PsiField)
-                    .map(m -> (PsiField) m)
-                    .filter(field -> field.getAnnotations().length > 0)
-                    .collect(Collectors.toList());
-                
-                // Group 3: Methods (sorted by visibility and name)
-                List<PsiMethod> methods = sortableMembers.stream()
-                    .filter(m -> m instanceof PsiMethod)
-                    .map(m -> (PsiMethod) m)
-                    .collect(Collectors.toList());
-                
-                // Sort each group using the comparator
-                regularFields.sort(new CodeElementSortComparator());
-                annotatedFields.sort(new CodeElementSortComparator());
-                methods.sort(new CodeElementSortComparator());
-                
-                // Create copies of elements before deleting the originals
-                List<PsiField> regularFieldsCopies = new ArrayList<>();
-                for (PsiField field : regularFields) {
-                    regularFieldsCopies.add((PsiField) field.copy());
-                }
-                
-                List<PsiField> annotatedFieldsCopies = new ArrayList<>();
-                for (PsiField field : annotatedFields) {
-                    annotatedFieldsCopies.add((PsiField) field.copy());
-                }
-                
-                List<PsiMethod> methodsCopies = new ArrayList<>();
-                for (PsiMethod method : methods) {
-                    methodsCopies.add((PsiMethod) method.copy());
-                }
-                
-                // Delete all original sortable members
-                List<PsiMember> membersToDelete = new ArrayList<>();
-                for (PsiElement element : psiClass.getChildren()) {
-                    if (element instanceof PsiMember &&
-                        (element instanceof PsiField || element instanceof PsiMethod)) {
-                        membersToDelete.add((PsiMember) element);
-                    }
-                }
-                
-                // Delete from last to first to maintain text offsets
-                membersToDelete.sort((a, b) -> b.getTextRange().getStartOffset() - a.getTextRange().getStartOffset());
-                for (PsiMember member : membersToDelete) {
-                    member.delete();
-                }
-
-                // Add regular fields first (if any)
-                PsiElement lastAdded = null;
-                for (int i = 0; i < regularFieldsCopies.size(); i++) {
-                    PsiField field = regularFieldsCopies.get(i);
-                    if (lastAdded == null) {
-                        lastAdded = psiClass.add(field);
-                    } else {
-                        lastAdded = psiClass.addAfter(field, lastAdded);
-                    }
-                }
-                
-                // Add annotated fields after regular fields with a blank line if there are annotated fields
-                if (!annotatedFieldsCopies.isEmpty()) {
-                    if (regularFieldsCopies.size() > 0) {
-                        // Add a blank line between regular fields and annotated fields
-                        try {
-                            PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                            lastAdded = psiClass.addAfter(whiteSpace, lastAdded);
-                        } catch (Exception e) {
-                            // Continue without adding whitespace if it fails
-                        }
-                    }
-                    
-                    for (int i = 0; i < annotatedFieldsCopies.size(); i++) {
-                        PsiField field = annotatedFieldsCopies.get(i);
-                        if (lastAdded == null && regularFieldsCopies.isEmpty()) {
-                            lastAdded = psiClass.add(field);
-                        } else {
-                            lastAdded = psiClass.addAfter(field, lastAdded);
-                        }
-                        
-                        // Add blank line after each annotated field (if not the last one and there are more elements following)
-                        if (i < annotatedFieldsCopies.size() - 1 || regularFieldsCopies.size() > 0 || methodsCopies.size() > 0) {
-                            try {
-                                PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                                lastAdded = psiClass.addAfter(whiteSpace, lastAdded);
-                            } catch (Exception e) {
-                                // Continue without adding whitespace if it fails
-                            }
-                        }
-                    }
-                }
-                
-                // Add methods after fields with a blank line if there are methods
-                if (!methodsCopies.isEmpty()) {
-                    if ((regularFieldsCopies.size() > 0 || annotatedFieldsCopies.size() > 0)) {
-                        // Add a blank line between fields and methods
-                        try {
-                            PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
-                            lastAdded = psiClass.addAfter(whiteSpace, lastAdded);
-                        } catch (Exception e) {
-                            // Continue without adding whitespace if it fails
-                        }
-                    }
-                    
-                    for (PsiMethod method : methodsCopies) {
-                        if (lastAdded == null && regularFieldsCopies.isEmpty() && annotatedFieldsCopies.isEmpty()) {
-                            lastAdded = psiClass.add(method);
-                        } else {
-                            lastAdded = psiClass.addAfter(method, lastAdded);
-                        }
-                    }
-                }
+                // Perform sorting and reorganization
+                performFullSorting(project, psiClass, sortableMembers);
             } else {
                 // For selected members - replace only the selected ones
-                // Sort the members using the custom sorting strategy
-                List<PsiMember> sortedMembers = new ArrayList<>(membersToSort);
-                sortedMembers.sort(new CodeElementSortComparator());
-
-                // Create copies before deletion
-                List<PsiMember> sortedCopies = new ArrayList<>();
-                for (PsiMember member : sortedMembers) {
-                    if (member instanceof PsiField) {
-                        sortedCopies.add((PsiMember) ((PsiField) member).copy());
-                    } else if (member instanceof PsiMethod) {
-                        sortedCopies.add((PsiMember) ((PsiMethod) member).copy());
-                    }
-                }
-
-                // Find the position to insert the sorted members
-                PsiElement positionMarker = null;
-                for (PsiElement element : psiClass.getChildren()) {
-                    if (element.getTextOffset() >= membersToSort.get(0).getTextOffset()) {
-                        positionMarker = element.getPrevSibling();
-                        break;
-                    }
-                }
-
-                // Delete the selected members
-                // Sort the membersToDelete from last to first to maintain text offsets
-                List<PsiMember> membersToDelete = new ArrayList<>(membersToSort);
-                membersToDelete.sort((a, b) -> b.getTextRange().getStartOffset() - a.getTextRange().getStartOffset());
-                for (PsiMember member : membersToDelete) {
-                    member.delete();
-                }
-
-                // Insert sorted members at the appropriate position
-                if (positionMarker != null) {
-                    for (PsiMember member : sortedCopies) {
-                        positionMarker = psiClass.addAfter(member, positionMarker);
-                    }
-                } else {
-                    // If no position marker found, just add all members
-                    for (PsiMember member : sortedCopies) {
-                        psiClass.add(member);
-                    }
-                }
+                performSelectedSorting(project, psiClass, membersToSort);
             }
         });
 
@@ -324,5 +165,154 @@ public class SortAction extends AnAction {
                     fieldCount + " fields, " + methodCount + " methods", "Success");
         }
     }
-}
+    
+    /**
+     * Perform full class sorting according to the README rules
+     */
+    private void performFullSorting(@NotNull Project project, PsiClass psiClass, List<PsiMember> sortableMembers) {
+        // Group fields and methods separately according to README rules
+        // Group 1: Regular variables (sorted by visibility and name) - following README order
+        List<PsiField> regularFields = sortableMembers.stream()
+            .filter(m -> m instanceof PsiField)
+            .map(m -> (PsiField) m)
+            .filter(field -> field.getAnnotations().length == 0)
+            .collect(Collectors.toList());
+        
+        // Group 2: Annotation variables (sorted by visibility and name) - following README order
+        List<PsiField> annotatedFields = sortableMembers.stream()
+            .filter(m -> m instanceof PsiField)
+            .map(m -> (PsiField) m)
+            .filter(field -> field.getAnnotations().length > 0)
+            .collect(Collectors.toList());
+        
+        // Group 3: Methods (sorted by visibility and name)
+        List<PsiMethod> methods = sortableMembers.stream()
+            .filter(m -> m instanceof PsiMethod)
+            .map(m -> (PsiMethod) m)
+            .collect(Collectors.toList());
+        
+        // Sort each group using the comparator
+        regularFields.sort(new CodeElementSortComparator());
+        annotatedFields.sort(new CodeElementSortComparator());
+        methods.sort(new CodeElementSortComparator());
 
+        // Create copies of elements before deleting the originals
+        List<PsiField> regularFieldsCopies = createFieldCopies(regularFields);
+        List<PsiField> annotatedFieldsCopies = createFieldCopies(annotatedFields);
+        List<PsiMethod> methodsCopies = createMethodCopies(methods);
+
+        // Delete all original sortable members
+        deleteMembers(psiClass, sortableMembers);
+
+        // Add members back in the correct order with appropriate spacing
+        addMembersWithSpacing(project, psiClass, regularFieldsCopies, annotatedFieldsCopies, methodsCopies);
+    }
+    
+    /**
+     * Create copies of a list of fields
+     */
+    private List<PsiField> createFieldCopies(List<PsiField> fields) {
+        List<PsiField> copies = new ArrayList<>();
+        for (PsiField field : fields) {
+            copies.add((PsiField) field.copy());
+        }
+        return copies;
+    }
+    
+    /**
+     * Create copies of a list of methods
+     */
+    private List<PsiMethod> createMethodCopies(List<PsiMethod> methods) {
+        List<PsiMethod> copies = new ArrayList<>();
+        for (PsiMethod method : methods) {
+            copies.add((PsiMethod) method.copy());
+        }
+        return copies;
+    }
+    
+    /**
+     * Delete a list of members from the class
+     */
+    private void deleteMembers(PsiClass psiClass, List<PsiMember> membersToDelete) {
+        // Delete from last to first to maintain text offsets
+        membersToDelete.sort((a, b) -> b.getTextRange().getStartOffset() - a.getTextRange().getStartOffset());
+        for (PsiMember member : membersToDelete) {
+            member.delete();
+        }
+    }
+    
+    /**
+    /**
+     * Add all members back to the class with appropriate spacing
+     */
+    private void addMembersWithSpacing(@NotNull Project project, PsiClass psiClass, 
+                                      List<PsiField> regularFieldsCopies,
+                                      List<PsiField> annotatedFieldsCopies,
+                                      List<PsiMethod> methodsCopies) {
+        // Add all regular fields first (if any)
+        for (PsiField field : regularFieldsCopies) {
+            psiClass.add(field);
+            
+            // Add blank line after regular field if it has Javadoc comment
+            if (hasJavadocComment(field)) {
+                try {
+                    PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                    psiClass.add(whiteSpace);
+                } catch (Exception e) {
+                    // Continue without adding whitespace if it fails
+                }
+            }
+        }
+        
+        // Add annotated fields after regular fields with a blank line if there are annotated fields
+        if (!annotatedFieldsCopies.isEmpty()) {
+            if (!regularFieldsCopies.isEmpty()) {
+                // Add a blank line between regular fields and annotated fields
+                try {
+                    PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                    psiClass.add(whiteSpace);
+                } catch (Exception e) {
+                    // Continue without adding whitespace if it fails
+                }
+            }
+            
+            for (PsiField field : annotatedFieldsCopies) {
+                psiClass.add(field);
+                
+                // According to README.md: "如果变量使用/**这样的多行注释或带有注解,在变量后面添加一个空行"
+                // Add blank line after annotated field (since it has annotations)
+                try {
+                    PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                    psiClass.add(whiteSpace);
+                } catch (Exception e) {
+                    // Continue without adding whitespace if it fails
+                }
+            }
+        }
+        
+        // Add methods after fields with a blank line if there are methods and fields exist
+        if (!methodsCopies.isEmpty() && (!regularFieldsCopies.isEmpty() || !annotatedFieldsCopies.isEmpty())) {
+            // Add a blank line between fields and methods
+            try {
+                PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                psiClass.add(whiteSpace);
+            } catch (Exception e) {
+                // Continue without adding whitespace if it fails
+            }
+        }
+        
+        // Add all methods
+        for (PsiMethod method : methodsCopies) {
+            psiClass.add(method);
+            
+            // Add blank line after method if it has a Javadoc comment
+            if (hasJavadocComment(method)) {
+                try {
+                    PsiElement whiteSpace = PsiParserFacade.getInstance(project).createWhiteSpaceFromText("\n");
+                    psiClass.add(whiteSpace);
+                } catch (Exception e) {
+                    // Continue without adding whitespace if it fails
+                }
+            }
+        }
+    }
