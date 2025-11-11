@@ -39,10 +39,8 @@ public class CodeElementSortComparator implements Comparator<PsiMember> {
         String name1 = member1.getName();
         String name2 = member2.getName();
 
-        if (name1 == null)
-            name1 = "";
-        if (name2 == null)
-            name2 = "";
+        name1 = (name1 != null) ? name1 : "";
+        name2 = (name2 != null) ? name2 : "";
 
         return name1.toLowerCase().compareTo(name2.toLowerCase());
     }
