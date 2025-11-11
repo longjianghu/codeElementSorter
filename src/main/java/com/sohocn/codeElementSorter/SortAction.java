@@ -174,7 +174,7 @@ public class SortAction extends AnAction {
     /**
      * Perform full class sorting according to the README rules
      */
-    private void performFullSorting(@NotNull Project project, PsiClass psiClass, List<PsiMember> sortableMembers) {
+        private void performFullSorting(@NotNull Project project, PsiClass psiClass, List<PsiMember> sortableMembers) {
         // Group fields and methods separately according to README rules
         
         // Group 1: Static fields
@@ -204,6 +204,14 @@ public class SortAction extends AnAction {
             .map(m -> (PsiMethod) m)
             .collect(Collectors.toList());
         
+        // Separate inner classes from the current class
+        List<PsiClass> innerClasses = new ArrayList<>();
+        for (PsiElement element : psiClass.getChildren()) {
+            if (element instanceof PsiClass && element != psiClass) {  // It's an inner class
+                innerClasses.add((PsiClass) element);
+            }
+        }
+        
         // Sort each group using the comparator
         staticFields.sort(new CodeElementSortComparator());
         regularInstanceFields.sort(new CodeElementSortComparator());
@@ -215,12 +223,22 @@ public class SortAction extends AnAction {
         List<PsiElement> regularInstanceFieldCopies = createElementCopiesWithRelatedElements(regularInstanceFields);
         List<PsiElement> annotatedInstanceFieldCopies = createElementCopiesWithRelatedElements(annotatedInstanceFields);
         List<PsiElement> methodCopies = createElementCopiesWithRelatedElements(methods);
+        
+        // Create copies of inner classes
+        List<PsiElement> innerClassCopies = new ArrayList<>();
+        for (PsiClass innerClass : innerClasses) {
+            innerClassCopies.add((PsiElement) innerClass.copy());
+        }
 
-        // Delete all original sortable members (this will remove them and their preceding comments)
-        deleteMembersWithComments(psiClass, sortableMembers);
+        // Delete all original sortable members and inner classes (this will remove them and their preceding comments)
+        List<PsiMember> allMembersToDelete = new ArrayList<>(sortableMembers);
+        for (PsiClass innerClass : innerClasses) {
+            allMembersToDelete.add(innerClass);
+        }
+        deleteMembersWithComments(psiClass, allMembersToDelete);
 
-        // Add members back in the correct order with appropriate spacing
-        addMembersWithSpacing(project, psiClass, staticFieldCopies, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies);
+        // Add members back in the correct order with appropriate spacing (inner classes last)
+        addMembersWithSpacing(project, psiClass, staticFieldCopies, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
     }
     
     /**
@@ -387,11 +405,18 @@ public class SortAction extends AnAction {
     /**
      * Add all members back to the class with appropriate spacing
      */
+        /**
+     * Add all members back to the class with appropriate spacing
+     */
+        /**
+     * Add all members back to the class with appropriate spacing
+     */
     private void addMembersWithSpacing(@NotNull Project project, PsiClass psiClass,
                                        List<PsiElement> staticFieldCopies,
                                        List<PsiElement> regularInstanceFieldCopies,
                                        List<PsiElement> annotatedInstanceFieldCopies,
-                                       List<PsiElement> methodCopies) {
+                                       List<PsiElement> methodCopies,
+                                       List<PsiElement> innerClassCopies) {
 
         // Get all existing class members to use as reference points
         PsiElement[] existingChildren = psiClass.getChildren();
@@ -399,7 +424,7 @@ public class SortAction extends AnAction {
         // Remove all existing members we're replacing
         List<PsiElement> elementsToRemove = new ArrayList<>();
         for (PsiElement child : existingChildren) {
-            if (child instanceof PsiField || child instanceof PsiMethod) {
+            if (child instanceof PsiField || child instanceof PsiMethod || child instanceof PsiClass) {
                 elementsToRemove.add(child);
             }
         }
@@ -416,10 +441,10 @@ public class SortAction extends AnAction {
                 PsiElement element = staticFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Check if member has Javadoc or annotations and add blank line after (except for the very last element)
+                // Only add blank line after static fields with Javadoc or annotations (except the very last one in the class)
                 if (element instanceof PsiField && (hasJavadocComment(element) || hasAnnotations((PsiField) element))) {
                     // Only add blank line if this is not the absolute last element in the class
-                    boolean isLastElement = isLastElement(i, staticFieldCopies, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies);
+                    boolean isLastElement = isLastElement(i, staticFieldCopies, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
                     if (!isLastElement) {
                         PsiElement blankLine = createBlankLine(project);
                         if (blankLine != null) {
@@ -431,7 +456,7 @@ public class SortAction extends AnAction {
             }
             
             // Add a blank line between static fields and other field types, if there are other fields
-            if (!regularInstanceFieldCopies.isEmpty() || !annotatedInstanceFieldCopies.isEmpty()) {
+            if (!regularInstanceFieldCopies.isEmpty() || !annotatedInstanceFieldCopies.isEmpty() || !methodCopies.isEmpty() || !innerClassCopies.isEmpty()) {
                 PsiElement blankLine = createBlankLine(project);
                 if (blankLine != null) {
                     psiClass.addAfter(blankLine, lastAddedElement);
@@ -445,10 +470,10 @@ public class SortAction extends AnAction {
                 PsiElement element = regularInstanceFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Check if member has Javadoc and add blank line after (except for the very last element)
+                // Only add blank line after fields with Javadoc (except the very last one in the class)
                 if (element instanceof PsiField && hasJavadocComment(element)) {
                     // Only add blank line if this is not the absolute last element in the class
-                    boolean isLastElement = isLastElement(i, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies);
+                    boolean isLastElement = isLastElement(i, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
                     if (!isLastElement) {
                         PsiElement blankLine = createBlankLine(project);
                         if (blankLine != null) {
@@ -460,7 +485,7 @@ public class SortAction extends AnAction {
             }
             
             // Add a blank line between regular instance fields and annotated instance fields/methods, if there are such fields/methods
-            if (!annotatedInstanceFieldCopies.isEmpty() || !methodCopies.isEmpty()) {
+            if (!annotatedInstanceFieldCopies.isEmpty() || !methodCopies.isEmpty() || !innerClassCopies.isEmpty()) {
                 PsiElement blankLine = createBlankLine(project);
                 if (blankLine != null) {
                     psiClass.addAfter(blankLine, lastAddedElement);
@@ -474,22 +499,19 @@ public class SortAction extends AnAction {
                 PsiElement element = annotatedInstanceFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // All annotated fields get blank line after them (per README), except the very last element
-                if (element instanceof PsiField) {
-                    // Only add blank line if this is not the absolute last element in the class
-                    boolean isLastElement = isLastElement(i, annotatedInstanceFieldCopies, methodCopies);
-                    if (!isLastElement) {
-                        PsiElement blankLine = createBlankLine(project);
-                        if (blankLine != null) {
-                            psiClass.addAfter(blankLine, addedElement);
-                        }
+                // All annotated fields get blank line after them (per README), except the very last element in the class
+                boolean isLastElement = isLastElement(i, annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
+                if (!isLastElement) {
+                    PsiElement blankLine = createBlankLine(project);
+                    if (blankLine != null) {
+                        psiClass.addAfter(blankLine, addedElement);
                     }
                 }
                 lastAddedElement = addedElement;
             }
             
             // Add a blank line between annotated instance fields and methods, if there are methods
-            if (!methodCopies.isEmpty()) {
+            if (!methodCopies.isEmpty() || !innerClassCopies.isEmpty()) {
                 PsiElement blankLine = createBlankLine(project);
                 if (blankLine != null) {
                     psiClass.addAfter(blankLine, lastAddedElement);
@@ -503,16 +525,41 @@ public class SortAction extends AnAction {
                 PsiElement element = methodCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Check if method has Javadoc and add blank line after, but not after the last element
+                // Only add blank line after methods with Javadoc (except the very last one in the class)
                 if (element instanceof PsiMethod && hasJavadocComment(element)) {
-                    // Don't add blank line after the very last element
-                    if (i < methodCopies.size() - 1 || (!staticFieldCopies.isEmpty() || !regularInstanceFieldCopies.isEmpty() || 
-                        !annotatedInstanceFieldCopies.isEmpty())) {
-                        // Add blank line if this isn't the last element overall
+                    // Only add blank line if this is not the absolute last element in the class
+                    boolean isLastElement = isLastElement(i, methodCopies, innerClassCopies);
+                    if (!isLastElement) {
                         PsiElement blankLine = createBlankLine(project);
                         if (blankLine != null) {
                             psiClass.addAfter(blankLine, addedElement);
                         }
+                    }
+                }
+                lastAddedElement = addedElement;
+            }
+            
+            // Add a blank line between methods and inner classes, if there are inner classes
+            if (!innerClassCopies.isEmpty()) {
+                PsiElement blankLine = createBlankLine(project);
+                if (blankLine != null) {
+                    psiClass.addAfter(blankLine, lastAddedElement);
+                }
+            }
+        }
+        
+        // Add inner classes at the end
+        if (!innerClassCopies.isEmpty()) {
+            for (int i = 0; i < innerClassCopies.size(); i++) {
+                PsiElement element = innerClassCopies.get(i);
+                PsiElement addedElement = psiClass.add(element);
+                
+                // Only add blank line after inner classes if not the very last element
+                boolean isLastElement = (i == innerClassCopies.size() - 1);
+                if (!isLastElement) {
+                    PsiElement blankLine = createBlankLine(project);
+                    if (blankLine != null) {
+                        psiClass.addAfter(blankLine, addedElement);
                     }
                 }
                 lastAddedElement = addedElement;
