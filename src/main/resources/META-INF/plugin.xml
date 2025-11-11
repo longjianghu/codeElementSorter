@@ -4,7 +4,22 @@
   <id>com.sohocn.codeElementSorter</id>
   <name>Code Element Sorter</name>
   <vendor email="215241062@qq.com">龙江湖</vendor>
-  <description><![CDATA[Intelligent sorting of variables and methods in the current page, supporting both full-page sorting and selected region sorting modes.]]></description>
+    <description><![CDATA[
+  <ul>
+    <li><b>Intelligent Sorting:</b> Intelligent sorting of variables and methods in the current page, supporting both full-page sorting and selected region sorting modes.</li>
+    <li><b>Multi-layer Inner Class Support:</b> Recursively sorts multi-layer inner classes up to 3 levels deep.</li>
+    <li><b>Group-based Sorting:</b> Sorts elements into groups: static fields → instance fields → methods → inner classes.</li>
+    <li><b>Custom Spacing Rules:</b> Preserves single blank line between element groups, adds blank lines after elements with Javadoc annotations.</li>
+    <li><b>Flexible Operation Modes:</b> Supports full file sorting and selected partial sorting based on user selection.</li>
+  </ul>
+  <ul>
+    <li><b>智能排序：</b>智能排序当前页面中的变量和方法，支持全页排序和选定区域排序两种模式。</li>
+    <li><b>多层内部类支持：</b>递归排序多层内部类，最多支持3层深度。</li>
+    <li><b>分组排序：</b>将元素按组排序：静态字段 → 实例字段 → 方法 → 内部类。</li>
+    <li><b>自定义间距规则：</b>保留元素组之间的单个空行，在带有Javadoc注解的元素后添加空行。</li>
+    <li><b>灵活的操作模式：</b>根据用户选择支持全文件排序和选定部分排序。</li>
+  </ul>
+  ]]></description>
   <depends>com.intellij.modules.platform</depends>
   <depends>com.intellij.modules.java</depends>
 
