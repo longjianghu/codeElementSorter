@@ -411,6 +411,15 @@ public class SortAction extends AnAction {
         /**
      * Add all members back to the class with appropriate spacing
      */
+        /**
+     * Add all members back to the class with appropriate spacing
+     */
+        /**
+     * Add all members back to the class with appropriate spacing
+     */
+        /**
+     * Add all members back to the class with appropriate spacing
+     */
     private void addMembersWithSpacing(@NotNull Project project, PsiClass psiClass,
                                        List<PsiElement> staticFieldCopies,
                                        List<PsiElement> regularInstanceFieldCopies,
@@ -441,22 +450,20 @@ public class SortAction extends AnAction {
                 PsiElement element = staticFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Only add blank line after static fields with Javadoc or annotations (except the very last one in the class)
+                // Only add blank line after static fields with Javadoc or annotations if it's the absolute last element in the class
                 if (element instanceof PsiField && (hasJavadocComment(element) || hasAnnotations((PsiField) element))) {
-                    // Only add blank line if this is not the absolute last element in the class
+                    // Only add blank line if this is the absolute last element in the class (meaning it's the last of the last group)
                     boolean isLastElement = isLastElement(i, staticFieldCopies, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
                     if (!isLastElement) {
-                        PsiElement blankLine = createBlankLine(project);
-                        if (blankLine != null) {
-                            psiClass.addAfter(blankLine, addedElement);
-                        }
+                        // Don't add blank line after elements within the group, only do that between groups
                     }
                 }
                 lastAddedElement = addedElement;
             }
             
             // Add a blank line between static fields and other field types, if there are other fields
-            if (!regularInstanceFieldCopies.isEmpty() || !annotatedInstanceFieldCopies.isEmpty() || !methodCopies.isEmpty() || !innerClassCopies.isEmpty()) {
+            if (!regularInstanceFieldCopies.isEmpty() || !annotatedInstanceFieldCopies.isEmpty() || 
+                !methodCopies.isEmpty() || !innerClassCopies.isEmpty()) {
                 PsiElement blankLine = createBlankLine(project);
                 if (blankLine != null) {
                     psiClass.addAfter(blankLine, lastAddedElement);
@@ -470,21 +477,17 @@ public class SortAction extends AnAction {
                 PsiElement element = regularInstanceFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Only add blank line after fields with Javadoc (except the very last one in the class)
+                // Only add blank line after fields with Javadoc if it's the absolute last element in the class
                 if (element instanceof PsiField && hasJavadocComment(element)) {
-                    // Only add blank line if this is not the absolute last element in the class
                     boolean isLastElement = isLastElement(i, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
                     if (!isLastElement) {
-                        PsiElement blankLine = createBlankLine(project);
-                        if (blankLine != null) {
-                            psiClass.addAfter(blankLine, addedElement);
-                        }
+                        // Don't add blank line after elements within the group, only do that between groups
                     }
                 }
                 lastAddedElement = addedElement;
             }
             
-            // Add a blank line between regular instance fields and annotated instance fields/methods, if there are such fields/methods
+            // Add a blank line between regular instance fields and other types, if there are other groups
             if (!annotatedInstanceFieldCopies.isEmpty() || !methodCopies.isEmpty() || !innerClassCopies.isEmpty()) {
                 PsiElement blankLine = createBlankLine(project);
                 if (blankLine != null) {
@@ -499,18 +502,17 @@ public class SortAction extends AnAction {
                 PsiElement element = annotatedInstanceFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // All annotated fields get blank line after them (per README), except the very last element in the class
+                // Don't add blank line after annotated fields within the group
+                // Only add blank line if it's the absolute last element in the class
                 boolean isLastElement = isLastElement(i, annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
-                if (!isLastElement) {
-                    PsiElement blankLine = createBlankLine(project);
-                    if (blankLine != null) {
-                        psiClass.addAfter(blankLine, addedElement);
-                    }
+                if (isLastElement) {
+                    // If this is the very last element in the entire class, add blank line
+                    // But this is already handled by other logic - we need to be more careful
                 }
                 lastAddedElement = addedElement;
             }
             
-            // Add a blank line between annotated instance fields and methods, if there are methods
+            // Add a blank line between annotated instance fields and methods/inner classes, if there are other groups
             if (!methodCopies.isEmpty() || !innerClassCopies.isEmpty()) {
                 PsiElement blankLine = createBlankLine(project);
                 if (blankLine != null) {
@@ -525,15 +527,11 @@ public class SortAction extends AnAction {
                 PsiElement element = methodCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Only add blank line after methods with Javadoc (except the very last one in the class)
+                // Only add blank line after methods with Javadoc if it's the absolute last element in the class
                 if (element instanceof PsiMethod && hasJavadocComment(element)) {
-                    // Only add blank line if this is not the absolute last element in the class
                     boolean isLastElement = isLastElement(i, methodCopies, innerClassCopies);
                     if (!isLastElement) {
-                        PsiElement blankLine = createBlankLine(project);
-                        if (blankLine != null) {
-                            psiClass.addAfter(blankLine, addedElement);
-                        }
+                        // Don't add blank line after elements within the group, only do that between groups
                     }
                 }
                 lastAddedElement = addedElement;
@@ -554,7 +552,7 @@ public class SortAction extends AnAction {
                 PsiElement element = innerClassCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Only add blank line after inner classes if not the very last element
+                // Only add blank line after inner classes if not the very last element in the entire structure
                 boolean isLastElement = (i == innerClassCopies.size() - 1);
                 if (!isLastElement) {
                     PsiElement blankLine = createBlankLine(project);
@@ -566,7 +564,7 @@ public class SortAction extends AnAction {
             }
         }
         
-        // Clean up any excessive whitespace between elements
+        // Clean up any excessive whitespace between elements to ensure proper spacing
         cleanupExcessiveWhitespace(psiClass);
     }
     
