@@ -443,6 +443,15 @@ public class SortAction extends AnAction {
         /**
      * Add all members back to the class with appropriate spacing
      */
+        /**
+     * Add all members back to the class with appropriate spacing
+     */
+        /**
+     * Add all members back to the class with appropriate spacing
+     */
+        /**
+     * Add all members back to the class with appropriate spacing
+     */
     private void addMembersWithSpacing(@NotNull Project project, PsiClass psiClass,
                                        List<PsiElement> staticFieldCopies,
                                        List<PsiElement> regularInstanceFieldCopies,
@@ -473,26 +482,27 @@ public class SortAction extends AnAction {
                 PsiElement element = staticFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Add blank line after static fields with Javadoc or annotations (except the very last one in the class)
+                // Add blank line after static fields with Javadoc or annotations (but avoid if followed by group separator)
+                // Only add if this is not the last element in its group and the class has other groups
                 boolean hasJavadocOrAnnotations = false;
                 if (element instanceof PsiField) {
                     hasJavadocOrAnnotations = hasJavadocComment(element) || hasAnnotations((PsiField) element);
                 }
                 
-                if (hasJavadocOrAnnotations) {
-                    // Only add blank line if this is not the absolute last element in the class
-                    boolean isLastElement = isLastElement(i, staticFieldCopies, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
-                    if (!isLastElement) {
-                        PsiElement blankLine = createBlankLine(project);
-                        if (blankLine != null) {
-                            psiClass.addAfter(blankLine, addedElement);
-                        }
+                if (hasJavadocOrAnnotations && i < staticFieldCopies.size() - 1) {
+                    // Add blank line if this is not the last element in the static fields group
+                    PsiElement blankLine = createBlankLine(project);
+                    if (blankLine != null) {
+                        psiClass.addAfter(blankLine, addedElement);
                     }
+                } else if (hasJavadocOrAnnotations && i == staticFieldCopies.size() - 1) {
+                    // This is the last static field, check if we need a blank line before moving to next group
+                    // We'll add group separator later
                 }
                 lastAddedElement = addedElement;
             }
             
-            // Add a blank line between static fields and other field types, if there are other fields
+            // Add a blank line between static fields and other member types, if there are other groups
             if (!regularInstanceFieldCopies.isEmpty() || !annotatedInstanceFieldCopies.isEmpty() || 
                 !methodCopies.isEmpty() || !innerClassCopies.isEmpty()) {
                 PsiElement blankLine = createBlankLine(project);
@@ -508,16 +518,15 @@ public class SortAction extends AnAction {
                 PsiElement element = regularInstanceFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Add blank line after fields with Javadoc (except the very last one in the class)
-                if (element instanceof PsiField && hasJavadocComment(element)) {
-                    // Only add blank line if this is not the absolute last element in the class
-                    boolean isLastElement = isLastElement(i, regularInstanceFieldCopies, annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
-                    if (!isLastElement) {
-                        PsiElement blankLine = createBlankLine(project);
-                        if (blankLine != null) {
-                            psiClass.addAfter(blankLine, addedElement);
-                        }
+                // Add blank line after fields with Javadoc (but avoid if followed by group separator)
+                // Only add if this is not the last element in its group
+                if (element instanceof PsiField && hasJavadocComment(element) && i < regularInstanceFieldCopies.size() - 1) {
+                    PsiElement blankLine = createBlankLine(project);
+                    if (blankLine != null) {
+                        psiClass.addAfter(blankLine, addedElement);
                     }
+                } else if (element instanceof PsiField && hasJavadocComment(element) && i == regularInstanceFieldCopies.size() - 1) {
+                    // This is the last regular instance field, group separator will be added later if needed
                 }
                 lastAddedElement = addedElement;
             }
@@ -537,14 +546,16 @@ public class SortAction extends AnAction {
                 PsiElement element = annotatedInstanceFieldCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // All annotated fields get blank line after them (per README), except the very last element in the class
-                boolean isLastElement = isLastElement(i, annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
-                if (!isLastElement) {
+                // Add blank line after annotated fields only if not the last in group
+                // Since all annotated fields get special treatment, let's be more selective
+                if (i < annotatedInstanceFieldCopies.size() - 1) {
+                    // Not the last annotated field in this group
                     PsiElement blankLine = createBlankLine(project);
                     if (blankLine != null) {
                         psiClass.addAfter(blankLine, addedElement);
                     }
-                }
+                } 
+                // The last annotated field will have group separator if needed
                 lastAddedElement = addedElement;
             }
             
@@ -563,16 +574,15 @@ public class SortAction extends AnAction {
                 PsiElement element = methodCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Add blank line after methods with Javadoc (except the very last one in the class)
-                if (element instanceof PsiMethod && hasJavadocComment(element)) {
-                    // Only add blank line if this is not the absolute last element in the class
-                    boolean isLastElement = isLastElement(i, methodCopies, innerClassCopies);
-                    if (!isLastElement) {
-                        PsiElement blankLine = createBlankLine(project);
-                        if (blankLine != null) {
-                            psiClass.addAfter(blankLine, addedElement);
-                        }
+                // Add blank line after methods with Javadoc (but avoid if followed by group separator)
+                // Only add if this is not the last element in its group
+                if (element instanceof PsiMethod && hasJavadocComment(element) && i < methodCopies.size() - 1) {
+                    PsiElement blankLine = createBlankLine(project);
+                    if (blankLine != null) {
+                        psiClass.addAfter(blankLine, addedElement);
                     }
+                } else if (element instanceof PsiMethod && hasJavadocComment(element) && i == methodCopies.size() - 1) {
+                    // This is the last method, group separator will be added later if needed
                 }
                 lastAddedElement = addedElement;
             }
@@ -592,9 +602,8 @@ public class SortAction extends AnAction {
                 PsiElement element = innerClassCopies.get(i);
                 PsiElement addedElement = psiClass.add(element);
                 
-                // Only add blank line after inner classes if not the very last element
-                boolean isLastElement = (i == innerClassCopies.size() - 1);
-                if (!isLastElement) {
+                // Only add blank line between inner classes, not after the last one
+                if (i < innerClassCopies.size() - 1) {
                     PsiElement blankLine = createBlankLine(project);
                     if (blankLine != null) {
                         psiClass.addAfter(blankLine, addedElement);
