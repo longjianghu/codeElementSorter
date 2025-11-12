@@ -526,20 +526,53 @@ public class SortAction extends AnAction {
 
     private void performSelectedSorting(PsiClass psiClass, List<PsiMember> membersToSort) {
         List<PsiMember> sortableMembers = membersToSort
-            .stream()
-            .filter(member -> member instanceof PsiField || member instanceof PsiMethod)
-            .collect(Collectors.toList());
+                .stream()
+                .filter(member -> member instanceof PsiField || member instanceof PsiMethod)
+                .collect(Collectors.toList());
 
         if (sortableMembers.isEmpty()) {
             return;
         }
 
+        // 1. Find the anchor point (the element to insert BEFORE).
+        int selectionEndOffset = sortableMembers.stream()
+                .map(m -> m.getTextRange().getEndOffset())
+                .max(Integer::compareTo).orElse(0);
+
+        PsiElement anchor = null;
+        for (PsiElement child : psiClass.getChildren()) {
+            if (child.getTextRange().getStartOffset() >= selectionEndOffset) {
+                if (child instanceof PsiField || child instanceof PsiMethod || child instanceof PsiClass) {
+                    anchor = child;
+                    break;
+                }
+            }
+        }
+        // If no anchor is found, it means the selection extends to the end of the class.
+        // In this case, the anchor is the closing brace.
+        if (anchor == null) {
+            anchor = psiClass.getRBrace();
+        }
+
+        // 2. Sort the members.
         sortableMembers.sort(new CodeElementSortComparator());
+
+        // 3. Create copies.
+        List<PsiElement> copies = this.createElementCopiesWithComments(sortableMembers);
+
+        // 4. Delete original members.
         this.deleteMembersWithComments(sortableMembers);
 
-        List<PsiElement> copies = this.createElementCopiesWithComments(sortableMembers);
-        for (PsiElement copy : copies) {
-            psiClass.add(copy);
+        // 5. Insert sorted copies before the anchor.
+        if (anchor != null) {
+            for (PsiElement copy : copies) {
+                psiClass.addBefore(copy, anchor);
+            }
+        } else {
+            // Fallback: if rbrace is not found, add to the end of the class
+            for (PsiElement copy : copies) {
+                psiClass.add(copy);
+            }
         }
     }
 
