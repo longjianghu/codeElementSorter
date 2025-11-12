@@ -488,7 +488,7 @@ public class SortAction extends AnAction {
                 innerClasses.add((PsiClass)element);
                 if (depth < 2) {
                     List<PsiMember> innerSortableMembers = new ArrayList<>();
-                    for (PsiElement innerElement : ((PsiClass)element).getChildren()) {
+                    for (PsiElement innerElement : element.getChildren()) {
                         if ((innerElement instanceof PsiField || innerElement instanceof PsiMethod)) {
                             innerSortableMembers.add((PsiMember)innerElement);
                         }
@@ -551,7 +551,7 @@ public class SortAction extends AnAction {
 
             if (lastElement instanceof PsiWhiteSpace) {
                 String text = lastElement.getText();
-                if (text.trim().isEmpty()) { // Only whitespace characters
+                if (text.trim().isEmpty()) {
                     try {
                         lastElement.delete();
                         childrenList = new ArrayList<>(Arrays.asList(psiClass.getChildren()));
