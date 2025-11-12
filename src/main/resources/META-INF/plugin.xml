@@ -5,6 +5,7 @@
   <name>Code Element Sorter</name>
   <vendor email="215241062@qq.com">龙江湖</vendor>
     <description><![CDATA[
+  <h2><b>Usage:</b> Right-click menu, select "Sort Members A-Z"</h2>
   <ul>
     <li><b>Intelligent Sorting:</b> Intelligent sorting of variables and methods in the current page, supporting both full-page sorting and selected region sorting modes.</li>
     <li><b>Multi-layer Inner Class Support:</b> Recursively sorts multi-layer inner classes up to 3 levels deep.</li>
@@ -12,6 +13,7 @@
     <li><b>Custom Spacing Rules:</b> Preserves single blank line between element groups, adds blank lines after elements with Javadoc annotations.</li>
     <li><b>Flexible Operation Modes:</b> Supports full file sorting and selected partial sorting based on user selection.</li>
   </ul>
+  <h2><b>使用方法：</b>鼠标右键点击菜单，选择“Sort Members A-Z”</h2>
   <ul>
     <li><b>智能排序：</b>智能排序当前页面中的变量和方法，支持全页排序和选定区域排序两种模式。</li>
     <li><b>多层内部类支持：</b>递归排序多层内部类，最多支持3层深度。</li>
