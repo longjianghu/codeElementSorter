@@ -12,6 +12,7 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.command.WriteCommandAction;
+import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.project.Project;
@@ -24,6 +25,7 @@ import com.intellij.psi.*;
  * @author longjianghu
  */
 public class SortAction extends AnAction {
+    private static final Logger LOG = Logger.getInstance(SortAction.class);
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
@@ -553,8 +555,19 @@ public class SortAction extends AnAction {
             anchor = psiClass.getRBrace();
         }
 
+        if (anchor != null) {
+            PsiElement prevSibling = anchor.getPrevSibling();
+            if (prevSibling instanceof PsiWhiteSpace) {
+                prevSibling.delete();
+            }
+        }
+
         sortableMembers.sort(new CodeElementSortComparator());
         List<PsiElement> copies = this.createElementCopiesWithComments(sortableMembers);
+
+        while (!copies.isEmpty() && copies.get(0) instanceof PsiWhiteSpace) {
+            copies.remove(0);
+        }
 
         this.deleteMembersWithComments(sortableMembers);
 
