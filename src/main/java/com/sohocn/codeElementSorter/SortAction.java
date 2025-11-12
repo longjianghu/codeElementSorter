@@ -12,7 +12,6 @@ import com.intellij.openapi.actionSystem.AnAction;
 import com.intellij.openapi.actionSystem.AnActionEvent;
 import com.intellij.openapi.actionSystem.PlatformDataKeys;
 import com.intellij.openapi.command.WriteCommandAction;
-import com.intellij.openapi.diagnostic.Logger;
 import com.intellij.openapi.editor.Editor;
 import com.intellij.openapi.editor.SelectionModel;
 import com.intellij.openapi.project.Project;
@@ -25,7 +24,6 @@ import com.intellij.psi.*;
  * @author longjianghu
  */
 public class SortAction extends AnAction {
-    private static final Logger LOG = Logger.getInstance(SortAction.class);
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
@@ -187,8 +185,8 @@ public class SortAction extends AnAction {
     }
 
     private void addMembersWithSpacing(@NotNull Project project, PsiClass psiClass, List<PsiElement> staticFieldCopies,
-        List<PsiElement> regularInstanceFieldCopies, List<PsiElement> annotatedInstanceFieldCopies,
-        List<PsiElement> methodCopies, List<PsiElement> innerClassCopies) {
+                                       List<PsiElement> regularInstanceFieldCopies, List<PsiElement> annotatedInstanceFieldCopies,
+                                       List<PsiElement> methodCopies, List<PsiElement> innerClassCopies) {
 
         PsiElement[] existingChildren = psiClass.getChildren();
 
@@ -451,7 +449,7 @@ public class SortAction extends AnAction {
     }
 
     private void performFullSortingWithDepth(@NotNull Project project, PsiClass psiClass,
-        List<PsiMember> sortableMembers, int depth) {
+                                             List<PsiMember> sortableMembers, int depth) {
 
         if (depth >= 3) {
             return;
