@@ -5,10 +5,11 @@ import java.util.Comparator;
 import com.intellij.psi.PsiField;
 import com.intellij.psi.PsiMember;
 import com.intellij.psi.PsiModifier;
+import com.intellij.psi.PsiType;
 
 /**
  * The type Code element sort comparator.
- * 
+ *
  * @author longjianghu
  */
 public class CodeElementSortComparator implements Comparator<PsiMember> {
@@ -18,6 +19,14 @@ public class CodeElementSortComparator implements Comparator<PsiMember> {
 
         if (typeComparison != 0) {
             return typeComparison;
+        }
+
+        if (member1 instanceof PsiField && member2 instanceof PsiField) {
+            int listComparison = this.compareByListType((PsiField) member1, (PsiField) member2);
+
+            if (listComparison != 0) {
+                return listComparison;
+            }
         }
 
         int staticComparison = this.compareByStatic(member1, member2);
@@ -33,6 +42,19 @@ public class CodeElementSortComparator implements Comparator<PsiMember> {
         }
 
         return this.compareByName(member1, member2);
+    }
+
+    private int compareByListType(PsiField field1, PsiField field2) {
+        boolean isField1List = isListField(field1);
+        boolean isField2List = isListField(field2);
+
+        if (isField1List && !isField2List) {
+            return 1;
+        } else if (!isField1List && isField2List) {
+            return -1;
+        } else {
+            return 0;
+        }
     }
 
     private int compareByName(PsiMember member1, PsiMember member2) {
@@ -92,5 +114,23 @@ public class CodeElementSortComparator implements Comparator<PsiMember> {
         } else {
             return 1;
         }
+    }
+
+    private boolean isListField(PsiField field) {
+        if (field == null) {
+            return false;
+        } else {
+            field.getType();
+        }
+
+        PsiType fieldType = field.getType();
+        String fieldTypeName = fieldType.getCanonicalText();
+
+        return fieldTypeName.startsWith("java.util.List") ||
+                fieldTypeName.startsWith("java.util.ArrayList") ||
+                fieldTypeName.startsWith("java.util.LinkedList") ||
+                fieldTypeName.startsWith("java.util.Vector") ||
+                fieldTypeName.startsWith("java.util.Stack") ||
+                fieldTypeName.contains(".List");
     }
 }
