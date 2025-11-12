@@ -45,16 +45,25 @@
 6. **注解包私有变量** (无修饰符 fields with annotations)
 7. **注解受保护变量** (`protected` fields with annotations)
 8. **注解私有变量** (`private` fields with annotations)
-9. **公共方法** (`public` methods)
-10. **包私有方法** (无修饰符 methods)
-11. **受保护方法** (`protected` methods)
-12. **私有方法** (`private` methods)
+9. **List类型公共变量** (`public` List fields - ArrayList, LinkedList, Vector, etc.)
+10. **List类型包私有变量** (无修饰符 List fields - ArrayList, LinkedList, Vector, etc.)
+11. **List类型受保护变量** (`protected` List fields - ArrayList, LinkedList, Vector, etc.)
+12. **List类型私有变量** (`private` List fields - ArrayList, LinkedList, Vector, etc.)
+13. **公共方法** (`public` methods)
+14. **包私有方法** (无修饰符 methods)
+15. **受保护方法** (`protected` methods)
+16. **私有方法** (`private` methods)
 
 #### 格式化空行规则
 - **不同字段组之间**：在静态字段组、普通实例字段组、带注解的实例字段组之间添加空行
 - **元素后空行**：带 Javadoc 或注解的元素后添加空行
 - **类末尾清理**：移除类末尾的多余空行
 - **元素间空行管理**：移除元素之间多余的空行，只保留必要的间距
+
+#### List 类型字段特殊规则
+- **List 类型检测**：包括 `java.util.List`, `ArrayList`, `LinkedList`, `Vector`, `Stack` 等实现类
+- **排序位置**：List 类型字段在所有非 List 类型字段之后，保持与其他字段相同的可见性排序规则
+- **子类型处理**：所有 List 相关实现类都按此规则排序
 
 ### 2.3 深度字母排序
 - **A-Z字典序**：按元素名称进行字母顺序排序
@@ -86,13 +95,13 @@ public class UserService {
     private String logPrefix;
     public static final int MAX_RETRY = 3;
     private UserRepository repository;
-    
+
     @Resource
     private UserService userService;
-    
+
     @Autowired
     private UserRepository userRepository;
-    
+
     private void validateInput() { }
     public void createUser(User user) { }
     public void updateUser(Long id) { }
@@ -113,7 +122,7 @@ public class UserService {
     // 注解变量区域（按可见性→名称深度排序）
     @Autowired
     private UserRepository userRepository;
-    
+
     @Resource
     private UserService userService;
 
@@ -122,6 +131,26 @@ public class UserService {
     public void deleteUser(Long id) { }
     public void updateUser(Long id) { }
     private void validateInput() { }
+}
+```
+
+### 4.3 List 类型字段排序示例
+```java
+public class DataProcessor {
+    // 普通变量区域
+    private int age;
+    private String name;
+    private boolean isActive;
+    private double salary;
+
+    // List类型字段区域（List字段会排在其他字段之后）
+    private java.util.List<String> stringList;
+    private java.util.ArrayList<Integer> intArrayList;
+    private java.util.LinkedList<String> stringLinkedList;
+    private java.util.Vector<String> vectorField;
+
+    public void processData() { }
+    private void validateData() { }
 }
 ```
 
@@ -138,7 +167,7 @@ public class UserService {
 - 验证选择区域的完整性
 ```
 
-#### 排序策略器 (SortingStrategy) 
+#### 排序策略器 (SortingStrategy)
 ```java
 // 实现分组排序规则
 - 普通变量分组 (按可见性→名称深度排序)
@@ -148,9 +177,9 @@ public class UserService {
 - 第一个元素前面不要添加空行
 - 如果变量带注释,也需要在变量后面添加空行
 - 如果变量使用/**这样的多行注释或带有注解,在变量后面添加一个空行
-- 移除类末尾的多余空行
-- 在不同字段组之间添加适当的空行
-- 移除元素之间多余的空行（保持合适的间距）
+ - 移除类末尾的多余空行
+ - 在不同字段组之间添加适当的空行
+ - 移除元素之间多余的空行（保持合适的间距）
 ```
 
 #### 模式检测器 (ModeDetector)
@@ -205,7 +234,7 @@ public class UserService {
 
 ### 8.1 响应时间要求
 - **小文件** (< 100行)：< 100ms
-- **中等文件** (100-500行)：< 500ms  
+- **中等文件** (100-500行)：< 500ms
 - **大文件** (> 500行)：< 1000ms
 
 ### 8.2 内存使用
@@ -232,4 +261,3 @@ public class UserService {
 ---
 
 **总结**：Code Element Sorter 插件通过智能的双模式排序机制，为开发者提供了一键整理代码结构的强大工具，显著提升代码的可读性和维护性，是团队协作和代码规范化的理想助手。
-
