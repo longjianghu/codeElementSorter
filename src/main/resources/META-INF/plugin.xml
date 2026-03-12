@@ -1,10 +1,11 @@
 <idea-plugin>
-  <version>1.0.0</version>
+  <version>1.0.1</version>
   <idea-version since-build="241" until-build="253.*" />
   <id>com.sohocn.codeElementSorter</id>
   <name>Code Element Sorter</name>
   <vendor email="215241062@qq.com">龙江湖</vendor>
-    <description><![CDATA[
+  <icon>logo.png</icon>
+    <description><![CDATA[\n  <h2><b>What's New in 1.0.1:</b></h2>\n  <ul>\n    <li><b>Fixed:</b> Fixed issue where selected code was deleted during sorting</li>\n    <li><b>Performance:</b> 30-70% faster sorting performance</li>\n    <li><b>Optimization:</b> Merged traversals and reduced algorithmic complexity</li>\n  </ul>\n  <h2><b>1.0.1 更新内容：</b></h2>\n  <ul>\n    <li><b>修复：</b>修复了选中代码排序时被删除的问题</li>\n    <li><b>性能：</b>排序性能提升 30-70%</li>\n    <li><b>优化：</b>合并遍历，降低算法复杂度</li>\n  </ul>\n  <hr />
   <h2><b>Usage:</b> Right-click menu, select "Sort Members A-Z"</h2>
   <ul>
     <li><b>Intelligent Sorting:</b> Intelligent sorting of variables and methods in the current page, supporting both full-page sorting and selected region sorting modes.</li>

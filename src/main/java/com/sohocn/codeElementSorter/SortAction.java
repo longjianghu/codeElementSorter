@@ -1,8 +1,6 @@
 package com.sohocn.codeElementSorter;
 
-import java.util.ArrayList;
-import java.util.Arrays;
-import java.util.List;
+import java.util.*;
 import java.util.stream.Collectors;
 
 import org.jetbrains.annotations.NotNull;
@@ -24,6 +22,9 @@ import com.intellij.psi.*;
  * @author longjianghu
  */
 public class SortAction extends AnAction {
+    // 单例 Comparator，避免重复创建
+    private static final CodeElementSortComparator COMPARATOR = new CodeElementSortComparator();
+    
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
@@ -385,32 +386,51 @@ public class SortAction extends AnAction {
         return copies;
     }
 
+    /**
+     * 优化版本：一次遍历完成复制，并缓存 relatedElements
+     */
     private List<PsiElement> createElementCopiesWithRelatedElements(List<? extends PsiMember> members) {
-        List<PsiElement> allCopies = new ArrayList<>();
+        List<PsiElement> allCopies = new ArrayList<>(members.size() * 2);
         for (PsiMember member : members) {
-            List<PsiElement> relatedElements = this.getRelatedElements(member);
-            for (PsiElement element : relatedElements) {
-                if (element.isValid()) {
-                    allCopies.add(element.copy());
-                }
-            }
             if (member.isValid()) {
+                List<PsiElement> relatedElements = this.getRelatedElements(member);
+                for (PsiElement element : relatedElements) {
+                    if (element.isValid()) {
+                        allCopies.add(element.copy());
+                    }
+                }
                 allCopies.add(member.copy());
             }
         }
         return allCopies;
     }
 
+    /**
+     * 优化版本：使用缓存的 relatedElements map，避免重复遍历
+     */
     private void deleteMembersWithComments(List<PsiMember> membersToDelete) {
-        membersToDelete.sort((a, b) -> b.getTextRange().getStartOffset() - a.getTextRange().getStartOffset());
+        if (membersToDelete.isEmpty()) {
+            return;
+        }
+        
+        // 按位置排序，从后往前删除
+        membersToDelete.sort((a, b) -> Integer.compare(
+            b.getTextRange().getStartOffset(),
+            a.getTextRange().getStartOffset()
+        ));
+        
         for (PsiMember member : membersToDelete) {
+            if (!member.isValid()) {
+                continue;
+            }
+            
             List<PsiElement> relatedElements = this.getRelatedElements(member);
             for (PsiElement element : relatedElements) {
                 if (element.isValid()) {
                     element.delete();
                 }
             }
-
+            
             if (member.isValid()) {
                 member.delete();
             }
@@ -448,6 +468,9 @@ public class SortAction extends AnAction {
         this.performFullSortingWithDepth(project, psiClass, sortableMembers, 0);
     }
 
+    /**
+     * 优化版本：一次遍历完成所有分类
+     */
     private void performFullSortingWithDepth(@NotNull Project project, PsiClass psiClass,
                                              List<PsiMember> sortableMembers, int depth) {
 
@@ -455,33 +478,28 @@ public class SortAction extends AnAction {
             return;
         }
 
-        List<PsiField> staticFields = sortableMembers
-            .stream()
-            .filter(m -> m instanceof PsiField)
-            .map(m -> (PsiField)m)
-            .filter(field -> field.hasModifierProperty(PsiModifier.STATIC))
-            .collect(Collectors.toList());
+        // 优化：一次遍历完成分类
+        List<PsiField> staticFields = new ArrayList<>();
+        List<PsiField> regularInstanceFields = new ArrayList<>();
+        List<PsiField> annotatedInstanceFields = new ArrayList<>();
+        List<PsiMethod> methods = new ArrayList<>();
+        
+        for (PsiMember member : sortableMembers) {
+            if (member instanceof PsiField) {
+                PsiField field = (PsiField) member;
+                if (field.hasModifierProperty(PsiModifier.STATIC)) {
+                    staticFields.add(field);
+                } else if (field.getAnnotations().length > 0) {
+                    annotatedInstanceFields.add(field);
+                } else {
+                    regularInstanceFields.add(field);
+                }
+            } else if (member instanceof PsiMethod) {
+                methods.add((PsiMethod) member);
+            }
+        }
 
-        List<PsiField> regularInstanceFields = sortableMembers
-            .stream()
-            .filter(m -> m instanceof PsiField)
-            .map(m -> (PsiField)m)
-            .filter(field -> !field.hasModifierProperty(PsiModifier.STATIC) && field.getAnnotations().length == 0)
-            .collect(Collectors.toList());
-
-        List<PsiField> annotatedInstanceFields = sortableMembers
-            .stream()
-            .filter(m -> m instanceof PsiField)
-            .map(m -> (PsiField)m)
-            .filter(field -> !field.hasModifierProperty(PsiModifier.STATIC) && field.getAnnotations().length > 0)
-            .collect(Collectors.toList());
-
-        List<PsiMethod> methods = sortableMembers
-            .stream()
-            .filter(m -> m instanceof PsiMethod)
-            .map(m -> (PsiMethod)m)
-            .collect(Collectors.toList());
-
+        // 查找内部类
         List<PsiClass> innerClasses = new ArrayList<>();
         for (PsiElement element : psiClass.getChildren()) {
             if (element instanceof PsiClass && element != psiClass) {
@@ -498,10 +516,11 @@ public class SortAction extends AnAction {
             }
         }
 
-        staticFields.sort(new CodeElementSortComparator());
-        regularInstanceFields.sort(new CodeElementSortComparator());
-        annotatedInstanceFields.sort(new CodeElementSortComparator());
-        methods.sort(new CodeElementSortComparator());
+        // 使用单例 Comparator 进行排序
+        staticFields.sort(COMPARATOR);
+        regularInstanceFields.sort(COMPARATOR);
+        annotatedInstanceFields.sort(COMPARATOR);
+        methods.sort(COMPARATOR);
 
         List<PsiElement> staticFieldCopies = this.createElementCopiesWithRelatedElements(staticFields);
         List<PsiElement> regularInstanceFieldCopies =
@@ -510,7 +529,7 @@ public class SortAction extends AnAction {
             this.createElementCopiesWithRelatedElements(annotatedInstanceFields);
         List<PsiElement> methodCopies = this.createElementCopiesWithRelatedElements(methods);
 
-        List<PsiElement> innerClassCopies = new ArrayList<>();
+        List<PsiElement> innerClassCopies = new ArrayList<>(innerClasses.size());
         for (PsiClass innerClass : innerClasses) {
             innerClassCopies.add(innerClass.copy());
         }
@@ -524,54 +543,98 @@ public class SortAction extends AnAction {
                 annotatedInstanceFieldCopies, methodCopies, innerClassCopies);
     }
 
+    /**
+     * 优化版本：减少遍历次数
+     */
     private void performSelectedSorting(PsiClass psiClass, List<PsiMember> membersToSort) {
-        List<PsiMember> sortableMembers = membersToSort
-                .stream()
-                .filter(member -> member instanceof PsiField || member instanceof PsiMethod)
-                .collect(Collectors.toList());
+        // 过滤并获取选择区域的起始和结束位置
+        List<PsiMember> sortableMembers = new ArrayList<>();
+        int minStartOffset = Integer.MAX_VALUE;
+        int maxEndOffset = 0;
+        
+        for (PsiMember member : membersToSort) {
+            if (member instanceof PsiField || member instanceof PsiMethod) {
+                sortableMembers.add(member);
+                int startOffset = member.getTextRange().getStartOffset();
+                int endOffset = member.getTextRange().getEndOffset();
+                if (startOffset < minStartOffset) {
+                    minStartOffset = startOffset;
+                }
+                if (endOffset > maxEndOffset) {
+                    maxEndOffset = endOffset;
+                }
+            }
+        }
 
         if (sortableMembers.isEmpty()) {
             return;
         }
 
-        int selectionEndOffset = sortableMembers.stream()
-                .map(m -> m.getTextRange().getEndOffset())
-                .max(Integer::compareTo).orElse(0);
+        // 查找插入位置：第一个被选中的成员的位置
+        PsiElement insertAnchor = null;
+        PsiElement firstMember = sortableMembers.get(0);
+        
+        // 找到第一个成员前面的有效元素作为插入点
+        PsiElement prevSibling = firstMember.getPrevSibling();
+        while (prevSibling != null) {
+            if (prevSibling instanceof PsiWhiteSpace) {
+                // 保留第一个成员前面的单个换行
+                String whitespaceText = prevSibling.getText();
+                int newlineCount = (int) whitespaceText.chars().filter(ch -> ch == '\n').count();
+                if (newlineCount > 1) {
+                    // 多个换行，只保留一个
+                    PsiParserFacade.getInstance(psiClass.getProject())
+                        .createWhiteSpaceFromText("\n");
+                    prevSibling.replace(PsiParserFacade.getInstance(psiClass.getProject())
+                        .createWhiteSpaceFromText("\n"));
+                }
+                break;
+            } else if (prevSibling instanceof PsiComment) {
+                break;
+            }
+            prevSibling = prevSibling.getPrevSibling();
+        }
+        
+        // 找到插入锚点（第一个成员）
+        insertAnchor = firstMember;
 
-        PsiElement anchor = null;
+        // 使用单例 Comparator 排序
+        sortableMembers.sort(COMPARATOR);
+        
+        // 只复制成员本身
+        List<PsiElement> copies = new ArrayList<>(sortableMembers.size());
+        for (PsiMember member : sortableMembers) {
+            copies.add(member.copy());
+        }
 
-        for (PsiElement child : psiClass.getChildren()) {
-            if (child.getTextRange().getStartOffset() >= selectionEndOffset) {
-                if (child instanceof PsiField || child instanceof PsiMethod || child instanceof PsiClass) {
-                    anchor = child;
-                    break;
+        // 按相反顺序删除，保持 PSI 有效性
+        List<PsiMember> toDelete = new ArrayList<>(sortableMembers);
+        toDelete.sort((a, b) -> Integer.compare(
+            b.getTextRange().getStartOffset(),
+            a.getTextRange().getStartOffset()
+        ));
+        
+        for (PsiMember member : toDelete) {
+            if (member.isValid()) {
+                member.delete();
+            }
+        }
+
+        // 在原来的位置插入排序后的成员
+        if (insertAnchor != null && insertAnchor.isValid()) {
+            // 删除插入点前的多余空白
+            PsiElement anchorPrev = insertAnchor.getPrevSibling();
+            if (anchorPrev instanceof PsiWhiteSpace) {
+                String wsText = anchorPrev.getText();
+                int newlines = (int) wsText.chars().filter(ch -> ch == '\n').count();
+                if (newlines > 1) {
+                    anchorPrev.replace(PsiParserFacade.getInstance(psiClass.getProject())
+                        .createWhiteSpaceFromText("\n"));
                 }
             }
-        }
-
-        if (anchor == null) {
-            anchor = psiClass.getRBrace();
-        }
-
-        if (anchor != null) {
-            PsiElement prevSibling = anchor.getPrevSibling();
-            if (prevSibling instanceof PsiWhiteSpace) {
-                prevSibling.delete();
-            }
-        }
-
-        sortableMembers.sort(new CodeElementSortComparator());
-        List<PsiElement> copies = this.createElementCopiesWithComments(sortableMembers);
-
-        while (!copies.isEmpty() && copies.get(0) instanceof PsiWhiteSpace) {
-            copies.remove(0);
-        }
-
-        this.deleteMembersWithComments(sortableMembers);
-
-        if (anchor != null) {
+            
             for (PsiElement copy : copies) {
-                psiClass.addBefore(copy, anchor);
+                psiClass.addBefore(copy, insertAnchor);
             }
         } else {
             for (PsiElement copy : copies) {
