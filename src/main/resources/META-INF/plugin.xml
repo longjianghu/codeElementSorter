@@ -1,6 +1,6 @@
 <idea-plugin>
     <version>1.0.1</version>
-    <idea-version since-build="241" until-build="299.*"/>
+    <idea-version since-build="241"/>
     <id>com.sohocn.codeElementSorter</id>
     <name>Code Element Sorter</name>
     <vendor email="215241062@qq.com">龙江湖</vendor>
