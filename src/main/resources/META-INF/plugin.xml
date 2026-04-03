@@ -1,6 +1,4 @@
 <idea-plugin>
-    <version>1.0.1</version>
-    <idea-version since-build="241"/>
     <id>com.sohocn.codeElementSorter</id>
     <name>Code Element Sorter</name>
     <vendor email="215241062@qq.com">龙江湖</vendor>
@@ -45,7 +43,7 @@
     <actions>
         <action id="CodeElementSorter.Sort"
                 class="com.sohocn.codeElementSorter.SortAction"
-                text="Sort Members A-Z"
+                text="Sort Members a-Z"
                 description="Sort all or selected variables and methods based on user selection">
             <add-to-group group-id="EditorPopupMenu" anchor="last"/>
         </action>
