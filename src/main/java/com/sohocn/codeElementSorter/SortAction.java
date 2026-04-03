@@ -1,6 +1,8 @@
 package com.sohocn.codeElementSorter;
 
-import java.util.*;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 import java.util.stream.Collectors;
 
 import org.jetbrains.annotations.NotNull;
@@ -24,7 +26,7 @@ import com.intellij.psi.*;
 public class SortAction extends AnAction {
     // 单例 Comparator，避免重复创建
     private static final CodeElementSortComparator COMPARATOR = new CodeElementSortComparator();
-    
+
     @Override
     public void actionPerformed(@NotNull AnActionEvent e) {
         Project project = e.getProject();
@@ -412,25 +414,25 @@ public class SortAction extends AnAction {
         if (membersToDelete.isEmpty()) {
             return;
         }
-        
+
         // 按位置排序，从后往前删除
         membersToDelete.sort((a, b) -> Integer.compare(
             b.getTextRange().getStartOffset(),
             a.getTextRange().getStartOffset()
         ));
-        
+
         for (PsiMember member : membersToDelete) {
             if (!member.isValid()) {
                 continue;
             }
-            
+
             List<PsiElement> relatedElements = this.getRelatedElements(member);
             for (PsiElement element : relatedElements) {
                 if (element.isValid()) {
                     element.delete();
                 }
             }
-            
+
             if (member.isValid()) {
                 member.delete();
             }
@@ -483,7 +485,7 @@ public class SortAction extends AnAction {
         List<PsiField> regularInstanceFields = new ArrayList<>();
         List<PsiField> annotatedInstanceFields = new ArrayList<>();
         List<PsiMethod> methods = new ArrayList<>();
-        
+
         for (PsiMember member : sortableMembers) {
             if (member instanceof PsiField) {
                 PsiField field = (PsiField) member;
@@ -551,7 +553,7 @@ public class SortAction extends AnAction {
         List<PsiMember> sortableMembers = new ArrayList<>();
         int minStartOffset = Integer.MAX_VALUE;
         int maxEndOffset = 0;
-        
+
         for (PsiMember member : membersToSort) {
             if (member instanceof PsiField || member instanceof PsiMethod) {
                 sortableMembers.add(member);
@@ -573,7 +575,7 @@ public class SortAction extends AnAction {
         // 查找插入位置：第一个被选中的成员的位置
         PsiElement insertAnchor = null;
         PsiElement firstMember = sortableMembers.get(0);
-        
+
         // 找到第一个成员前面的有效元素作为插入点
         PsiElement prevSibling = firstMember.getPrevSibling();
         while (prevSibling != null) {
@@ -594,13 +596,13 @@ public class SortAction extends AnAction {
             }
             prevSibling = prevSibling.getPrevSibling();
         }
-        
+
         // 找到插入锚点（第一个成员）
         insertAnchor = firstMember;
 
         // 使用单例 Comparator 排序
         sortableMembers.sort(COMPARATOR);
-        
+
         // 只复制成员本身
         List<PsiElement> copies = new ArrayList<>(sortableMembers.size());
         for (PsiMember member : sortableMembers) {
@@ -613,7 +615,7 @@ public class SortAction extends AnAction {
             b.getTextRange().getStartOffset(),
             a.getTextRange().getStartOffset()
         ));
-        
+
         for (PsiMember member : toDelete) {
             if (member.isValid()) {
                 member.delete();
@@ -632,7 +634,7 @@ public class SortAction extends AnAction {
                         .createWhiteSpaceFromText("\n"));
                 }
             }
-            
+
             for (PsiElement copy : copies) {
                 psiClass.addBefore(copy, insertAnchor);
             }

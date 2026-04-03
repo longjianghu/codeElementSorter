@@ -45,8 +45,8 @@ public class CodeElementSortComparator implements Comparator<PsiMember> {
     }
 
     private int compareByListType(PsiField field1, PsiField field2) {
-        boolean isField1List = isListField(field1);
-        boolean isField2List = isListField(field2);
+        boolean isField1List = this.isListField(field1);
+        boolean isField2List = this.isListField(field2);
 
         if (isField1List && !isField2List) {
             return 1;
